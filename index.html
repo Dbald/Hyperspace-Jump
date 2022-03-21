@@ -6,10 +6,7 @@
 </head>
 
 <body>
-  <a-scene stats vr-mode-ui="enterVRButton: #myEnterVRButton; enterARButton: #myEnterARButton">
-    <!-- Style the button with images or whatever. -->
-    <a id="myEnterVRButton" href="#"></a>
-    <a id="myEnterARButton" href="#"></a>
+  <a-scene stats>
     <!-- Asset Management -->
     <a-assets>
       <!-- <img id="spaceBg" crossorigin="anonymous" src="https://cdn.glitch.global/2023ddae-31f5-4ca3-9362-162b9c1dc5c2/spaceBackground.png?v=1647774931601"> -->
@@ -20,6 +17,7 @@
     <!-- Setup -->
     <a-gltf-model src="#fleet" animation-mixer="clip: *;"></a-gltf-model>
     <!-- <a-sky id="bg" src="#spaceBg"></a-sky> -->
+    <a-sky id="bg" color="black"></a-sky>
     <a-entity id="lighyRig" rotation="24.29971304929334 8.788599619511697 153.24271892789483">
       <a-entity light="color: #EEE; intensity: 1" position="-1 1 0"></a-entity>
     </a-entity>
