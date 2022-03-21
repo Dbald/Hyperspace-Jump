@@ -6,18 +6,17 @@
 </head>
 
 <body>
-  <a-scene stats>
+  <a-scene stats thumbstick-logging >
     <!-- Asset Management -->
     <a-assets>
-      <!-- <img id="spaceBg" crossorigin="anonymous" src="https://cdn.glitch.global/2023ddae-31f5-4ca3-9362-162b9c1dc5c2/spaceBackground.png?v=1647774931601"> -->
+      <img id="spaceBg" crossorigin="anonymous" src="https://cdn.glitch.global/2023ddae-31f5-4ca3-9362-162b9c1dc5c2/spaceBackground.png?v=1647774931601">
       <a-asset-item id="fleet"
         src="https://raw.githubusercontent.com/Dbald/Hyperspace-Jump/main/assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf">
       </a-asset-item>
     </a-assets>
     <!-- Setup -->
     <a-gltf-model src="#fleet" animation-mixer="clip: *;"></a-gltf-model>
-    <!-- <a-sky id="bg" src="#spaceBg"></a-sky> -->
-    <a-sky id="bg" color="black"></a-sky>
+    <a-sky id="bg" src="#spaceBg"></a-sky>
     <a-entity id="lighyRig" rotation="24.29971304929334 8.788599619511697 153.24271892789483">
       <a-entity light="color: #EEE; intensity: 1" position="-1 1 0"></a-entity>
     </a-entity>
@@ -27,7 +26,7 @@
     <a-entity oculus-touch-controls="hand: right"></a-entity>
 
   </a-scene>
-  <!-- <script>
+  <script>
       AFRAME.registerComponent('thumbstick-logging',{
   init: function () {
     this.el.addEventListener('thumbstickmoved', this.logThumbstick);
@@ -39,7 +38,7 @@
     if (evt.detail.x > 0.95) { console.log("RIGHT"); }
   }
 });
-    </script> -->
+    </script>
 </body>
 
 </html>
