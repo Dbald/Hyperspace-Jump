@@ -7,12 +7,12 @@
     <a-scene stats>
       <!-- Asset Management -->
       <a-assets>
-        <img id="space" crossorigin="anonymous" src="/Hyperspace-Jump/assets/img/spaceBackground.png">
+        <img id="spaceBg" crossorigin="anonymous" src="/Hyperspace-Jump/assets/img/spaceBackground.png">
         <a-asset-item id="fleet" src="https://raw.githubusercontent.com/Dbald/Hyperspace-Jump/main/assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf"></a-asset-item>
       </a-assets>
       <!-- Setup -->
       <a-gltf-model src="#fleet" animation-mixer="clip: *;"></a-gltf-model>
-      <a-sky id="bg" src="#space"></a-sky>
+      <a-sky id="bg" src="#spaceBg"></a-sky>
       <a-entity id="lighyRig" rotation="24.29971304929334 8.788599619511697 153.24271892789483">
         <a-entity light="color: #EEE; intensity: 1" position="-1 1 0"></a-entity>
       </a-entity>
