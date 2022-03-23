@@ -6,11 +6,11 @@
 </head>
 
 <body>
-  <a-scene stats thumbstick-logging >
+  <a-scene thumbstick-logging >
     <!-- Asset Management -->
     <a-assets>
       <img id="spaceBg" crossorigin="anonymous" src="https://cdn.glitch.global/2023ddae-31f5-4ca3-9362-162b9c1dc5c2/spaceBackground.png?v=1647774931601">
-      <img id="planet" crossorigin="anonymous" src="">
+      <img id="planet" crossorigin="anonymous" src="https://raw.githubusercontent.com/Dbald/Hyperspace-Jump/main/assets/img/tat.png">
       <a-asset-item id="fleet"
         src="https://raw.githubusercontent.com/Dbald/Hyperspace-Jump/main/assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf">
       </a-asset-item>
@@ -20,10 +20,13 @@
     <!-- Setup -->
     <a-gltf-model src="#fleet" animation-mixer="clip: *;"></a-gltf-model>
     <a-sky id="bg" src="#spaceBg"></a-sky>
-    <a-entity id="lighyRig" rotation="-4.839201537674932 -61.87428525397273 -1.9371703053373133"> 
-      <a-entity light="color: #EEE; intensity: 1; angle: 50; type: ambient" position="-1 1 0"></a-entity>
+    <a-entity id="lightRigPlanet" rotation="-4.839201537674932 -61.87428525397273 -1.9371703053373133"> 
+      <a-entity light="color: #EEE; intensity: 1.5; angle: 57.24; type: spot" position="-21.56304 1.23138 -10.9419"></a-entity>
     </a-entity>
-    <a-sphere radius="10" material="src: #planet" geometry="" position="500 -100 0.06302" scale="20 20 20"></a-sphere>
+    <a-entity id="lightRigShips" rotation="6.640580845566241 61.77745538659562 177.09323306580563" position="300 -90 0"> 
+      <a-entity light="color: #EEE; intensity: 1.5; angle: 57.24; type: spot" position="-21.56304 1.23138 -10.9419"></a-entity>
+    </a-entity>
+    <a-sphere radius="10" src="#planet" geometry="" position="500 -100 0.06302" scale="20 20 20" animation="property: rotation; to: 0 360 0; loop: true; dur: 200000; easing:"></a-sphere>
     <!-- Meta Quest 2 -->
     <!-- Controllers -->
     <a-entity oculus-touch-controls="hand: left"></a-entity>
