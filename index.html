@@ -10,6 +10,7 @@
     <!-- Asset Management -->
     <a-assets>
       <img id="spaceBg" crossorigin="anonymous" src="https://cdn.glitch.global/2023ddae-31f5-4ca3-9362-162b9c1dc5c2/spaceBackground.png?v=1647774931601">
+      <img id="planet" crossorigin="anonymous" src="">
       <a-asset-item id="fleet"
         src="https://raw.githubusercontent.com/Dbald/Hyperspace-Jump/main/assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf">
       </a-asset-item>
@@ -19,9 +20,10 @@
     <!-- Setup -->
     <a-gltf-model src="#fleet" animation-mixer="clip: *;"></a-gltf-model>
     <a-sky id="bg" src="#spaceBg"></a-sky>
-    <a-entity id="lighyRig" rotation="24.29971304929334 8.788599619511697 153.24271892789483">
-      <a-entity light="color: #EEE; intensity: 1" position="-1 1 0"></a-entity>
+    <a-entity id="lighyRig" rotation="-4.839201537674932 -61.87428525397273 -1.9371703053373133"> 
+      <a-entity light="color: #EEE; intensity: 1; angle: 50; type: ambient" position="-1 1 0"></a-entity>
     </a-entity>
+    <a-sphere radius="10" material="src: #planet" geometry="" position="500 -100 0.06302" scale="20 20 20"></a-sphere>
     <!-- Meta Quest 2 -->
     <!-- Controllers -->
     <a-entity oculus-touch-controls="hand: left"></a-entity>
