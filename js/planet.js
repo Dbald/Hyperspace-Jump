@@ -18,6 +18,9 @@ const SURFACE_VERTEX = `
   varying vec3 vWorldNormal;
   varying vec3 vWorldTangent;
 
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
   void main() {
     vUv = uv;
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
@@ -33,6 +36,7 @@ const SURFACE_VERTEX = `
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vWorldPosition = worldPosition.xyz;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    #include <logdepthbuf_vertex>
   }
 `;
 
@@ -60,7 +64,11 @@ const SURFACE_FRAGMENT = `
   varying vec3 vWorldNormal;
   varying vec3 vWorldTangent;
 
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
   void main() {
+    #include <logdepthbuf_fragment>
     vec3 geometryNormal = normalize(vWorldNormal);
     vec3 tangent = normalize(vWorldTangent - geometryNormal * dot(geometryNormal, vWorldTangent));
     vec3 bitangent = cross(geometryNormal, tangent);
@@ -134,12 +142,16 @@ const CLOUD_VERTEX = `
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
 
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
   void main() {
     vUv = uv;
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vWorldPosition = worldPosition.xyz;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    #include <logdepthbuf_vertex>
   }
 `;
 
@@ -155,7 +167,11 @@ const CLOUD_FRAGMENT = `
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
 
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
   void main() {
+    #include <logdepthbuf_fragment>
     float coverage = texture2D(uCloudMap, vUv).r;
     if (coverage < 0.01) discard;
 
@@ -186,10 +202,14 @@ const CLOUD_FRAGMENT = `
 const ATMOSPHERE_VERTEX = `
   varying vec3 vWorldPosition;
 
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
   void main() {
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vWorldPosition = worldPosition.xyz;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    #include <logdepthbuf_vertex>
   }
 `;
 
@@ -226,7 +246,11 @@ const ATMOSPHERE_FRAGMENT = `
     return vec2(-b - root, -b + root);
   }
 
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
   void main() {
+    #include <logdepthbuf_fragment>
     vec3 origin = cameraPosition;
     vec3 direction = normalize(vWorldPosition - cameraPosition);
 
