@@ -18,7 +18,7 @@ Scene code lives in `js/`:
 
 | file | what it does |
 | --- | --- |
-| `js/cockpit.js` | `cockpit` component: straps the viewer into an X-wing and locks out free flight |
+| `js/cockpit.js` | `cockpit` component: straps the viewer into an A-wing and locks out free flight |
 | `js/hyperspace.js` | `hyperspace` component: the five-phase jump sequence — streaks, throat, flash |
 | `js/sun.js` | `sun` system: one shared star direction, plus `sun-light` to place the key and fill lights along it |
 | `js/planet.js` | `planet` component: PBR surface, drifting cloud deck, ray-marched atmosphere |
@@ -105,35 +105,47 @@ The backdrop alone went from an 8.37 MB PNG to a 91 KB WebP.
 
 ## The cockpit
 
-`js/cockpit.js` puts the viewer in an X-wing seat. Three things about the source
-model shape how it works.
+`js/cockpit.js` puts the viewer in an A-wing's seat. The A-wing was chosen over
+the X-wing for one concrete reason: its canopy is the only genuinely
+transparent material in the fleet (`Window`, `alphaMode: BLEND`, alpha 0.07),
+so you can see out of it. Its hull parts are also named by anatomy — front,
+rear, dorsal, ventral — which lets the ship's frame be derived from real
+landmarks instead of guessed at, and it carries a `Pilot` and a `Seat`.
 
-**The hierarchy is flat.** There is no per-ship group node to parent to. All 180
-parts are siblings under one container, each carrying its own baked transform
-and its own animation track. So the rig is driven each frame rather than
-reparented — reparenting would also inherit the container's non-uniform scale
-and shrink the viewer.
+The component is retargetable: the ship name and the five landmark names are
+schema properties, not constants.
 
-**Every part of a ship shares one transform.** The layout between them lives in
-the vertex data, so `getWorldPosition` returns exactly the same point for the
-nose as for the tail. Parts are located by the world-space centre of their
-bounding box instead. (Missing this cost a debugging pass: the nose-to-tail
-vector came out as a zero-length vector, and the guard against that silently
-skipped the whole component every frame.)
+### Working around the model
 
-**Orientation cannot be read off the matrix.** Decomposing a world matrix
-beneath non-uniform scale yields a sheared quaternion, so the ship's frame is
-rebuilt from three known world points — nose, tail and R2's dome — and
-orthonormalised.
+**Node names are rewritten on load.** `GLTFLoader` runs every name through
+`PropertyBinding.sanitizeNodeName`, which strips characters that are illegal in
+animation paths. `A-Wing.001` becomes `A-Wing001`; `xwing2:Hull` becomes
+`xwing2Hull`. Names taken from the source file must go through the same
+transform before they will match anything.
+
+**Parts are located by bounding-box centre, not node position.** Some ships in
+this fleet keep their layout in the vertex data and share a single transform
+across every part, so `getWorldPosition` returns the same point for the nose as
+for the tail.
+
+**Ship length is measured, not inferred.** Deriving it from the distance
+between two hull-part centres understated it by more than half, because neither
+centre is anywhere near the nose or the tail. The whole subtree is measured in
+the ship's own local frame, which stays stable as the hull rotates.
+
+**The pilot is hidden.** Sitting in the seat means sitting inside their head.
+
+**The cockpit is forced double-sided.** Shells modelled for an exterior view
+have their back faces culled and vanish from within. Only the ridden ship gets
+this; the rest of the fleet keeps the cheaper single-sided draw.
 
 ### Scale
 
-The X-wing is **0.471 world units** nose to tail. Taking it as 12.5 m real,
-one world unit is about 26 m, and the rig is scaled by the resulting
-`unitsPerMetre` (≈0.0376) so a real metre of head movement maps to a metre of
-ship. Without that the viewer is a giant beside a 47 cm toy, and the whole
-cockpit falls inside the near plane — the first working build looked straight
-through the hull into space.
+The A-wing is **0.269 world units** nose to tail. Taken as 9.6 m real, one
+world unit is about 36 m, and the rig is scaled by the resulting
+`unitsPerMetre` (≈0.028) so a real metre of head movement maps to a metre of
+ship. Without it the viewer is a giant beside a toy and the whole cockpit falls
+inside the near plane.
 
 Scaling the rig means the far plane has to cover the sky measured in player
 metres, which pushes `near:far` past a million to one. That is what the
@@ -143,10 +155,11 @@ the wrong depth.
 
 ### Tuning the eye position
 
-Where a pilot's eyes sit is a judgement call that needs a real headset, not a
-number derived from a bounding box. With `cockpit="tune: true"`, arrow keys move
-fore/aft and left/right, PageUp/PageDown move up/down, and each nudge logs
-values to paste back into the schema defaults.
+The eye sits at the pilot's body centre plus an offset to head height. That
+offset is a judgement call that wants a real headset. With
+`cockpit="tune: true"`, arrow keys move fore/aft and left/right,
+PageUp/PageDown move up/down, and each nudge logs values to paste back into the
+schema defaults.
 
 ## The jump
 
