@@ -18,6 +18,7 @@ Scene code lives in `js/`:
 
 | file | what it does |
 | --- | --- |
+| `js/hyperspace.js` | `hyperspace` component: the five-phase jump sequence — streaks, throat, flash |
 | `js/sun.js` | `sun` system: one shared star direction, plus `sun-light` to place the key and fill lights along it |
 | `js/planet.js` | `planet` component: PBR surface, drifting cloud deck, ray-marched atmosphere |
 | `js/starfield.js` | `starfield` component: point-sprite stars with per-star colour and scintillation |
@@ -100,6 +101,35 @@ The backdrop alone went from an 8.37 MB PNG to a 91 KB WebP.
 - **Stars** — 5,000 point sprites with weighted main-sequence colours. Baking
   them into the sky texture would need roughly a 16k equirect map to survive
   mipmapping.
+
+## The jump
+
+`js/hyperspace.js` runs the sequence the title has always promised. Five phases —
+idle, charging, entering, cruising, exiting — drive three pieces of geometry:
+
+- **Streaks** — 650 ribbons in a cylindrical volume around the viewer, scrolling
+  and wrapping so a fixed set reads as an endless stream. Each is widened across
+  the screen rather than in world space, so it keeps a constant apparent
+  thickness whichever way the viewer looks, and is tapered to a comet profile so
+  it reads as light rather than a hard-ended quad.
+- **Throat** — the glow ahead on the travel axis.
+- **Flash** — held in front of the camera, ignoring depth, punched at entry and
+  again harder at arrival.
+
+The point-sprite starfield fades as the streaks arrive, so real stars and
+streaks are never both drawn at once.
+
+The component lives on an entity parented to the camera rig, so the tunnel
+travels with the viewer and looking around inside it behaves correctly. It
+fires `hyperspace-phase` on the scene at every transition, which is where
+audio, the fleet sequence and the cockpit lever will hook in.
+
+Two effects are deliberately disabled in VR, because both induce motion the
+viewer's body does not feel: the field-of-view widening that sells speed on a
+flat screen, and the charge-up rumble.
+
+To trigger it: press `J`, squeeze a controller trigger, or call
+`document.querySelector('#jump').components.hyperspace.jump()`.
 
 ## Total download
 

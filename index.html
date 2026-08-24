@@ -15,6 +15,7 @@
   <script src="js/sun.js"></script>
   <script src="js/planet.js"></script>
   <script src="js/starfield.js"></script>
+  <script src="js/hyperspace.js"></script>
   <script src="js/model-quality.js"></script>
 </head>
 
@@ -46,6 +47,9 @@
       </a-camera>
       <a-entity meta-touch-controls="hand: left"></a-entity>
       <a-entity meta-touch-controls="hand: right"></a-entity>
+
+      <!-- Parented to the rig so the tunnel travels with the viewer. -->
+      <a-entity id="jump" hyperspace="starfield: #stars"></a-entity>
     </a-entity>
 
     <a-gltf-model
