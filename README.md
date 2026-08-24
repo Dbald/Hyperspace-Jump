@@ -53,6 +53,11 @@ Geometry, not textures, was the weight: 31.5 MB of the previous 37 MB build was
 uncompressed position, normal, UV and index data. Draco brings that down without
 touching the animation tracks, all 206 of which survive intact.
 
+The pass also pulls the authored camera clip off a negative start time. It
+opened on a keyframe at -0.0333s, which violates the glTF spec and fails
+validation; the whole clip is shifted forward by that one frame so its samplers
+stay in sync and its keyframe times stay strictly increasing.
+
 Decoding needs the Draco decoder, vendored in `assets/vendor/draco/` so the
 deployed site has no third-party runtime dependency. Refresh it whenever the
 A-Frame version changes:

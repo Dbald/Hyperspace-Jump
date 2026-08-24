@@ -36,6 +36,76 @@ const COLOR_QUALITY = 82;
 const DATA_QUALITY = 94;
 const MAX_TEXTURE_SIZE = 1024;
 
+/**
+ * Shifts any animation whose timeline starts before zero so that it starts at
+ * zero instead.
+ *
+ * The authored camera clip opens on a keyframe at -0.0333s — one frame at
+ * 30fps — which violates the glTF spec (animation input times must be
+ * non-negative) and fails validation. Shifting the whole clip keeps its
+ * samplers in sync with each other and keeps keyframe times strictly
+ * increasing, which clamping to zero would not: one sampler already has a
+ * keyframe at exactly 0.
+ */
+function startAnimationsAtZero () {
+  return (document) => {
+    const root = document.getRoot();
+    const logger = document.getLogger();
+
+    // Dedup merges identical inputs, so one accessor can back several clips.
+    // Retiming in place would drag those other clips along with it.
+    const owners = new Map();
+    for (const animation of root.listAnimations()) {
+      for (const sampler of animation.listSamplers()) {
+        const input = sampler.getInput();
+        if (!input) continue;
+        if (!owners.has(input)) owners.set(input, new Set());
+        owners.get(input).add(animation);
+      }
+    }
+
+    let shiftedAnimations = 0;
+
+    for (const animation of root.listAnimations()) {
+      let earliest = Infinity;
+      for (const sampler of animation.listSamplers()) {
+        const input = sampler.getInput();
+        if (input) earliest = Math.min(earliest, input.getMin([])[0]);
+      }
+
+      if (!(earliest < 0)) continue;
+
+      const offset = -earliest;
+      const retimed = new Map();
+
+      for (const sampler of animation.listSamplers()) {
+        const input = sampler.getInput();
+        if (!input) continue;
+
+        if (retimed.has(input)) {
+          sampler.setInput(retimed.get(input));
+          continue;
+        }
+
+        const target = owners.get(input).size > 1 ? input.clone() : input;
+        const times = target.getArray().slice();
+        for (let i = 0; i < times.length; i++) times[i] += offset;
+        target.setArray(times);
+
+        sampler.setInput(target);
+        retimed.set(input, target);
+      }
+
+      shiftedAnimations++;
+      logger.debug(`startAnimationsAtZero: shifted "${animation.getName()}" by ${offset.toFixed(5)}s`);
+    }
+
+    if (shiftedAnimations > 0) {
+      logger.info(`startAnimationsAtZero: retimed ${shiftedAnimations} animation(s) off a negative start`);
+    }
+  };
+}
+
 function parseArgs (argv) {
   const args = { input: DEFAULT_INPUT, output: DEFAULT_OUTPUT };
   for (let i = 0; i < argv.length; i += 2) {
@@ -122,6 +192,8 @@ async function main () {
     prune({ keepAttributes: false }),
     // Losslessly remove redundant animation keyframes.
     resample(),
+    // Pull any clip that opens before t=0 back onto a legal timeline.
+    startAnimationsAtZero(),
     // Merge vertices that are identical across position, normal and UV.
     weld(),
     // Reorder indices and vertices for GPU cache locality; also improves the
