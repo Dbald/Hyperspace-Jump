@@ -1,13 +1,24 @@
 {
   "name": "hyperspace-jump",
   "private": true,
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "WebXR hyperspace sequence built with A-Frame.",
   "scripts": {
-    "optimize:model": "gltf-transform dedup assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf .tmp-fleet-1.glb && gltf-transform prune .tmp-fleet-1.glb .tmp-fleet-2.glb && gltf-transform resample .tmp-fleet-2.glb .tmp-fleet-3.glb && gltf-transform weld .tmp-fleet-3.glb assets/Fleet_Model/rebel_fleet_optimized.glb",
-    "inspect:model": "gltf-transform inspect assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf"
+    "build": "npm run build:textures && npm run optimize:model",
+    "build:textures": "node scripts/build-textures.mjs",
+    "optimize:model": "node scripts/optimize-fleet.mjs",
+    "inspect:model": "gltf-transform inspect assets/Fleet_Model/rebel_fleet_optimized.glb",
+    "vendor:draco": "node scripts/vendor-draco.mjs",
+    "serve": "npx --yes http-server . -p 8080 -c-1"
   },
   "devDependencies": {
-    "@gltf-transform/cli": "4.4.2"
+    "@gltf-transform/cli": "4.4.2",
+    "@gltf-transform/core": "4.4.2",
+    "@gltf-transform/extensions": "4.4.2",
+    "@gltf-transform/functions": "4.4.2",
+    "draco3dgltf": "1.5.7",
+    "meshoptimizer": "0.25.0",
+    "sharp": "0.34.4",
+    "three": "npm:super-three@0.184.0"
   }
 }

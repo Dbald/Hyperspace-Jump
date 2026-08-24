@@ -4,139 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#02040a">
+  <meta name="description" content="Double hyperspace jump to evade the Empire — a WebXR fleet sequence built with A-Frame.">
   <title>Hyperspace Jump</title>
+
+  <link rel="preload" as="fetch" href="assets/Fleet_Model/rebel_fleet_optimized.glb" crossorigin="anonymous">
 
   <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.7.0/dist/aframe-extras.min.js"></script>
 
-  <script>
-    // Improve texture sharpness at grazing angles while respecting each device's GPU limit.
-    AFRAME.registerComponent('texture-quality', {
-      init: function () {
-        this.apply = this.apply.bind(this);
-        this.el.addEventListener('materialtextureloaded', this.apply);
-        this.el.addEventListener('object3dset', this.apply);
-        this.apply();
-      },
-
-      apply: function () {
-        const renderer = this.el.sceneEl && this.el.sceneEl.renderer;
-        const mesh = this.el.getObject3D('mesh');
-        if (!renderer || !mesh) return;
-
-        const anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
-        mesh.traverse((node) => {
-          if (!node.isMesh || !node.material) return;
-          const materials = Array.isArray(node.material) ? node.material : [node.material];
-          materials.forEach((material) => {
-            ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach((slot) => {
-              if (material[slot]) {
-                material[slot].anisotropy = anisotropy;
-                material[slot].needsUpdate = true;
-              }
-            });
-          });
-        });
-      }
-    });
-
-    // Apply safe runtime tuning once the animated fleet is loaded.
-    AFRAME.registerComponent('model-quality', {
-      init: function () {
-        this.el.addEventListener('model-loaded', (event) => {
-          const renderer = this.el.sceneEl.renderer;
-          const anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
-
-          event.detail.model.traverse((node) => {
-            node.frustumCulled = true;
-            if (!node.isMesh || !node.material) return;
-
-            node.castShadow = false;
-            node.receiveShadow = false;
-
-            const materials = Array.isArray(node.material) ? node.material : [node.material];
-            materials.forEach((material) => {
-              ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach((slot) => {
-                if (material[slot]) {
-                  material[slot].anisotropy = anisotropy;
-                  material[slot].needsUpdate = true;
-                }
-              });
-              material.needsUpdate = true;
-            });
-          });
-        });
-      }
-    });
-
-    // Lightweight atmosphere shader: visual depth without a large atmosphere texture.
-    AFRAME.registerComponent('atmosphere-glow', {
-      schema: {
-        color: { type: 'color', default: '#9fc7ff' },
-        intensity: { type: 'number', default: 0.7 },
-        power: { type: 'number', default: 3.5 }
-      },
-
-      init: function () {
-        this.applyMaterial = this.applyMaterial.bind(this);
-        this.el.addEventListener('object3dset', this.applyMaterial);
-        this.applyMaterial();
-      },
-
-      applyMaterial: function () {
-        const mesh = this.el.getObject3D('mesh');
-        if (!mesh) return;
-
-        mesh.material = new THREE.ShaderMaterial({
-          uniforms: {
-            glowColor: { value: new THREE.Color(this.data.color) },
-            intensity: { value: this.data.intensity },
-            power: { value: this.data.power }
-          },
-          vertexShader: `
-            varying vec3 vNormal;
-            varying vec3 vWorldPosition;
-
-            void main() {
-              vNormal = normalize(mat3(modelMatrix) * normal);
-              vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-              vWorldPosition = worldPosition.xyz;
-              gl_Position = projectionMatrix * viewMatrix * worldPosition;
-            }
-          `,
-          fragmentShader: `
-            uniform vec3 glowColor;
-            uniform float intensity;
-            uniform float power;
-            varying vec3 vNormal;
-            varying vec3 vWorldPosition;
-
-            void main() {
-              vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-              float rim = pow(1.0 - abs(dot(normalize(vNormal), viewDirection)), power);
-              gl_FragColor = vec4(glowColor, rim * intensity);
-            }
-          `,
-          side: THREE.BackSide,
-          blending: THREE.AdditiveBlending,
-          transparent: true,
-          depthWrite: false
-        });
-      }
-    });
-  </script>
+  <script src="js/sun.js"></script>
+  <script src="js/planet.js"></script>
+  <script src="js/starfield.js"></script>
+  <script src="js/model-quality.js"></script>
 </head>
 
 <body>
   <a-scene
-    renderer="antialias: true; colorManagement: true; precision: medium"
+    renderer="antialias: true; colorManagement: true; precision: medium; foveationLevel: 1; toneMapping: ACESFilmic; exposure: 1.15; anisotropy: 8"
+    gltf-model="dracoDecoderPath: assets/vendor/draco/"
+    sun="direction: -0.36 0.30 -0.88; color: #fff4e0; intensity: 2.6; ambientColor: #5c7091; ambientIntensity: 0.32"
     background="color: #02040a"
     loading-screen="dotsColor: #dce9ff; backgroundColor: #02040a"
     device-orientation-permission-ui="enabled: true">
 
     <a-assets timeout="60000">
-      <img id="spaceBg" src="assets/img/spaceBackground.png" crossorigin="anonymous">
-      <img id="planetTexture" src="assets/img/tat.png" crossorigin="anonymous">
+      <img id="spaceBg" src="assets/generated/space_sky.webp" crossorigin="anonymous">
+      <img id="planetColor" src="assets/generated/planet_color.webp" crossorigin="anonymous">
+      <img id="planetNormal" src="assets/generated/planet_normal.webp" crossorigin="anonymous">
+      <img id="planetSurface" src="assets/generated/planet_surface.webp" crossorigin="anonymous">
+      <img id="planetClouds" src="assets/generated/planet_clouds.webp" crossorigin="anonymous">
       <a-asset-item id="fleet" src="assets/Fleet_Model/rebel_fleet_optimized.glb"></a-asset-item>
     </a-assets>
 
@@ -167,44 +63,33 @@
       animation="property: rotation; to: -360 -360 -360; loop: true; dur: 2000000; easing: linear">
     </a-sky>
 
-    <a-entity light="type: ambient; color: #93a5bd; intensity: 0.28"></a-entity>
+    <a-entity id="stars" starfield="count: 5000; radius: 2400; brightness: 1.05"></a-entity>
+
+    <a-entity light="type: ambient; color: #5c7091; intensity: 0.32"></a-entity>
     <a-entity
-      light="type: directional; color: #fff0d6; intensity: 2.0"
-      position="-4 3 -5">
+      light="type: directional; color: #fff4e0; intensity: 2.6"
+      sun-light="distance: 40">
     </a-entity>
     <a-entity
-      light="type: directional; color: #6f8fc8; intensity: 0.45"
-      position="5 -2 4">
+      light="type: directional; color: #6f8fc8; intensity: 0.85"
+      sun-light="distance: 40; opposite: true">
     </a-entity>
 
-    <a-sphere
+    <a-entity
       id="planet"
       position="500 -100 0.06302"
-      radius="200"
-      segments-width="128"
-      segments-height="64"
-      material="src: #planetTexture; shader: standard; roughness: 0.9; metalness: 0.02; anisotropy: 8"
-      texture-quality
-      animation="property: rotation; to: 0 360 0; loop: true; dur: 300000; easing: linear">
-    </a-sphere>
-
-    <a-sphere
-      id="planetAtmosphere"
-      position="500 -100 0.06302"
-      radius="207"
-      segments-width="96"
-      segments-height="48"
-      atmosphere-glow="color: #9fc7ff; intensity: 0.72; power: 3.6">
-    </a-sphere>
-
-    <a-sphere
-      id="planetHaze"
-      position="500 -100 0.06302"
-      radius="202"
-      segments-width="64"
-      segments-height="32"
-      material="color: #d5b999; transparent: true; opacity: 0.035; side: back; depthWrite: false">
-    </a-sphere>
+      planet="
+        radius: 200;
+        colorMap: #planetColor;
+        normalMap: #planetNormal;
+        surfaceMap: #planetSurface;
+        cloudMap: #planetClouds;
+        dayLength: 300;
+        cloudDayLength: 210;
+        skyColor: #8fc0ff;
+        twilightColor: #ff9a52;
+        nightColor: #141d31">
+    </a-entity>
   </a-scene>
 </body>
 </html>

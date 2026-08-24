@@ -1,0 +1,54 @@
+name: Build assets
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install build tooling
+        run: npm ci
+
+      - name: Rebuild planet and sky textures
+        run: npm run build:textures
+
+      - name: Rebuild optimized fleet model
+        run: npm run optimize:model
+
+      - name: Validate optimized fleet model
+        run: npx gltf-transform validate assets/Fleet_Model/rebel_fleet_optimized.glb
+
+      - name: Report generated asset sizes
+        shell: bash
+        run: |
+          {
+            echo "### Generated assets"
+            echo
+            echo '| file | size |'
+            echo '| --- | --- |'
+            for file in assets/Fleet_Model/rebel_fleet_optimized.glb assets/generated/*; do
+              printf '| `%s` | %s |\n' "$file" "$(du -h "$file" | cut -f1)"
+            done
+            echo
+            echo "Committed artifacts are what the site serves; this job only checks that"
+            echo "they can still be regenerated from the sources in the repository."
+          } >> "$GITHUB_STEP_SUMMARY"
