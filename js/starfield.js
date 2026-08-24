@@ -14,12 +14,13 @@ const STAR_VERTEX = `
 
   uniform float uTime;
   uniform float uPixelRatio;
+  uniform float uOpacity;
 
   varying vec3 vColor;
   varying float vTwinkle;
 
   void main() {
-    vColor = color;
+    vColor = color * uOpacity;
     // Scintillation, at a different rate per star.
     vTwinkle = 0.72 + 0.28 * sin(uTime * 1.6 + aPhase * 6.2831853);
 
@@ -136,7 +137,8 @@ AFRAME.registerComponent('starfield', {
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
-        uPixelRatio: { value: renderer ? renderer.getPixelRatio() : 1 }
+        uPixelRatio: { value: renderer ? renderer.getPixelRatio() : 1 },
+        uOpacity: { value: 1 }
       },
       vertexShader: STAR_VERTEX,
       fragmentShader: STAR_FRAGMENT,
@@ -153,6 +155,17 @@ AFRAME.registerComponent('starfield', {
 
   tick: function (time) {
     if (this.material) this.material.uniforms.uTime.value = time / 1000;
+  },
+
+  /**
+   * Fades the whole field. The hyperspace component uses this to hand the sky
+   * over to its streaks rather than drawing both at once.
+   */
+  setOpacity: function (value) {
+    if (!this.material || !this.points) return;
+    const opacity = Math.max(0, Math.min(1, value));
+    this.material.uniforms.uOpacity.value = opacity;
+    this.points.visible = opacity > 0.001;
   },
 
   remove: function () {
