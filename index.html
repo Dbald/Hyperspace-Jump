@@ -6,106 +6,8 @@
   <meta name="theme-color" content="#02040a">
   <title>Hyperspace Jump</title>
 
-  <!-- Current stable A-Frame + matching aframe-extras release. -->
   <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
-</head>
-
-<body>
-  <a-scene
-    renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true; precision: medium"
-    background="color: #02040a"
-    loading-screen="dotsColor: #dce9ff; backgroundColor: #02040a"
-    device-orientation-permission-ui="enabled: true">
-
-    <a-assets timeout="60000">
-      <!-- Keep scene assets local to the repo to remove the old Glitch dependency. -->
-      <img id="spaceBg" src="assets/img/spaceBackground.png" crossorigin="anonymous">
-      <img id="planetTexture" src="assets/img/tat.png" crossorigin="anonymous">
-
-      <!-- The optimization workflow generates rebel_fleet_optimized.glb. Until then,
-           this source remains the animation-safe original asset. -->
-      <a-asset-item
-        id="fleet"
-        src="assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf"
-        response-type="arraybuffer">
-      </a-asset-item>
-    </a-assets>
-
-    <!-- Camera + controllers share one rig so tracked hands stay aligned with the viewer. -->
-    <a-entity id="viewerRig" position="-2.1085 5.90192 0">
-      <a-camera
-        id="camera"
-        near="0.05"
-        far="5000"
-        wasd-controls="acceleration: 25"
-        look-controls>
-      </a-camera>
-      <a-entity oculus-touch-controls="hand: left"></a-entity>
-      <a-entity oculus-touch-controls="hand: right"></a-entity>
-    </a-entity>
-
-    <!-- Fleet -->
-    <a-gltf-model
-      id="fleetModel"
-      src="#fleet"
-      animation-mixer="clip: *"
-      model-quality>
-    </a-gltf-model>
-
-    <!-- Space backdrop -->
-    <a-sky
-      id="space"
-      src="#spaceBg"
-      radius="3000"
-      material="shader: flat"
-      animation="property: rotation; to: -360 -360 -360; loop: true; dur: 2000000; easing: linear">
-    </a-sky>
-
-    <!-- A cheap three-light setup gives the ships and planet a cinematic key/fill
-         without the cost of the previous long-range spot lights. -->
-    <a-entity light="type: ambient; color: #93a5bd; intensity: 0.28"></a-entity>
-    <a-entity
-      light="type: directional; color: #fff0d6; intensity: 2.0"
-      position="-4 3 -5">
-    </a-entity>
-    <a-entity
-      light="type: directional; color: #6f8fc8; intensity: 0.45"
-      position="5 -2 4">
-    </a-entity>
-
-    <!-- Planet surface: higher sphere tessellation, PBR material, improved texture filtering. -->
-    <a-sphere
-      id="planet"
-      position="500 -100 0.06302"
-      radius="200"
-      segments-width="128"
-      segments-height="64"
-      material="src: #planetTexture; shader: standard; roughness: 0.9; metalness: 0.02"
-      texture-quality
-      animation="property: rotation; to: 0 360 0; loop: true; dur: 300000; easing: linear">
-    </a-sphere>
-
-    <!-- Separate atmosphere shell creates a soft Fresnel rim instead of baking the glow into the texture. -->
-    <a-sphere
-      id="planetAtmosphere"
-      position="500 -100 0.06302"
-      radius="207"
-      segments-width="96"
-      segments-height="48"
-      atmosphere-glow="color: #9fc7ff; intensity: 0.72; power: 3.6">
-    </a-sphere>
-
-    <!-- Thin warm haze adds depth near the surface while remaining very cheap to render. -->
-    <a-sphere
-      id="planetHaze"
-      position="500 -100 0.06302"
-      radius="202"
-      segments-width="64"
-      segments-height="32"
-      material="color: #d5b999; transparent: true; opacity: 0.035; side: back; depthWrite: false">
-    </a-sphere>
-  </a-scene>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.7.0/dist/aframe-extras.min.js"></script>
 
   <script>
     // Improve texture sharpness at grazing angles while respecting each device's GPU limit.
@@ -149,7 +51,6 @@
             node.frustumCulled = true;
             if (!node.isMesh || !node.material) return;
 
-            // There are no realtime shadows in this scene, so avoid their GPU overhead.
             node.castShadow = false;
             node.receiveShadow = false;
 
@@ -224,5 +125,86 @@
       }
     });
   </script>
+</head>
+
+<body>
+  <a-scene
+    renderer="antialias: true; colorManagement: true; precision: medium"
+    background="color: #02040a"
+    loading-screen="dotsColor: #dce9ff; backgroundColor: #02040a"
+    device-orientation-permission-ui="enabled: true">
+
+    <a-assets timeout="60000">
+      <img id="spaceBg" src="assets/img/spaceBackground.png" crossorigin="anonymous">
+      <img id="planetTexture" src="assets/img/tat.png" crossorigin="anonymous">
+      <a-asset-item id="fleet" src="assets/Fleet_Model/rebel_fleet_optimized.glb"></a-asset-item>
+    </a-assets>
+
+    <a-entity id="viewerRig" position="-2.1085 5.90192 0">
+      <a-camera
+        id="camera"
+        near="0.05"
+        far="5000"
+        wasd-controls="acceleration: 25"
+        look-controls>
+      </a-camera>
+      <a-entity meta-touch-controls="hand: left"></a-entity>
+      <a-entity meta-touch-controls="hand: right"></a-entity>
+    </a-entity>
+
+    <a-gltf-model
+      id="fleetModel"
+      src="#fleet"
+      animation-mixer="clip: *"
+      model-quality>
+    </a-gltf-model>
+
+    <a-sky
+      id="space"
+      src="#spaceBg"
+      radius="3000"
+      material="shader: flat"
+      animation="property: rotation; to: -360 -360 -360; loop: true; dur: 2000000; easing: linear">
+    </a-sky>
+
+    <a-entity light="type: ambient; color: #93a5bd; intensity: 0.28"></a-entity>
+    <a-entity
+      light="type: directional; color: #fff0d6; intensity: 2.0"
+      position="-4 3 -5">
+    </a-entity>
+    <a-entity
+      light="type: directional; color: #6f8fc8; intensity: 0.45"
+      position="5 -2 4">
+    </a-entity>
+
+    <a-sphere
+      id="planet"
+      position="500 -100 0.06302"
+      radius="200"
+      segments-width="128"
+      segments-height="64"
+      material="src: #planetTexture; shader: standard; roughness: 0.9; metalness: 0.02; anisotropy: 8"
+      texture-quality
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 300000; easing: linear">
+    </a-sphere>
+
+    <a-sphere
+      id="planetAtmosphere"
+      position="500 -100 0.06302"
+      radius="207"
+      segments-width="96"
+      segments-height="48"
+      atmosphere-glow="color: #9fc7ff; intensity: 0.72; power: 3.6">
+    </a-sphere>
+
+    <a-sphere
+      id="planetHaze"
+      position="500 -100 0.06302"
+      radius="202"
+      segments-width="64"
+      segments-height="32"
+      material="color: #d5b999; transparent: true; opacity: 0.035; side: back; depthWrite: false">
+    </a-sphere>
+  </a-scene>
 </body>
 </html>
