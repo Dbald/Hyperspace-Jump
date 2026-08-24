@@ -1,51 +1,210 @@
-<html>
-
+<!doctype html>
+<html lang="en">
 <head>
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#02040a">
+  <title>Hyperspace Jump</title>
+
+  <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.7.0/dist/aframe-extras.min.js"></script>
+
+  <script>
+    // Improve texture sharpness at grazing angles while respecting each device's GPU limit.
+    AFRAME.registerComponent('texture-quality', {
+      init: function () {
+        this.apply = this.apply.bind(this);
+        this.el.addEventListener('materialtextureloaded', this.apply);
+        this.el.addEventListener('object3dset', this.apply);
+        this.apply();
+      },
+
+      apply: function () {
+        const renderer = this.el.sceneEl && this.el.sceneEl.renderer;
+        const mesh = this.el.getObject3D('mesh');
+        if (!renderer || !mesh) return;
+
+        const anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+        mesh.traverse((node) => {
+          if (!node.isMesh || !node.material) return;
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          materials.forEach((material) => {
+            ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach((slot) => {
+              if (material[slot]) {
+                material[slot].anisotropy = anisotropy;
+                material[slot].needsUpdate = true;
+              }
+            });
+          });
+        });
+      }
+    });
+
+    // Apply safe runtime tuning once the animated fleet is loaded.
+    AFRAME.registerComponent('model-quality', {
+      init: function () {
+        this.el.addEventListener('model-loaded', (event) => {
+          const renderer = this.el.sceneEl.renderer;
+          const anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+
+          event.detail.model.traverse((node) => {
+            node.frustumCulled = true;
+            if (!node.isMesh || !node.material) return;
+
+            node.castShadow = false;
+            node.receiveShadow = false;
+
+            const materials = Array.isArray(node.material) ? node.material : [node.material];
+            materials.forEach((material) => {
+              ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach((slot) => {
+                if (material[slot]) {
+                  material[slot].anisotropy = anisotropy;
+                  material[slot].needsUpdate = true;
+                }
+              });
+              material.needsUpdate = true;
+            });
+          });
+        });
+      }
+    });
+
+    // Lightweight atmosphere shader: visual depth without a large atmosphere texture.
+    AFRAME.registerComponent('atmosphere-glow', {
+      schema: {
+        color: { type: 'color', default: '#9fc7ff' },
+        intensity: { type: 'number', default: 0.7 },
+        power: { type: 'number', default: 3.5 }
+      },
+
+      init: function () {
+        this.applyMaterial = this.applyMaterial.bind(this);
+        this.el.addEventListener('object3dset', this.applyMaterial);
+        this.applyMaterial();
+      },
+
+      applyMaterial: function () {
+        const mesh = this.el.getObject3D('mesh');
+        if (!mesh) return;
+
+        mesh.material = new THREE.ShaderMaterial({
+          uniforms: {
+            glowColor: { value: new THREE.Color(this.data.color) },
+            intensity: { value: this.data.intensity },
+            power: { value: this.data.power }
+          },
+          vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vWorldPosition;
+
+            void main() {
+              vNormal = normalize(mat3(modelMatrix) * normal);
+              vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+              vWorldPosition = worldPosition.xyz;
+              gl_Position = projectionMatrix * viewMatrix * worldPosition;
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 glowColor;
+            uniform float intensity;
+            uniform float power;
+            varying vec3 vNormal;
+            varying vec3 vWorldPosition;
+
+            void main() {
+              vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
+              float rim = pow(1.0 - abs(dot(normalize(vNormal), viewDirection)), power);
+              gl_FragColor = vec4(glowColor, rim * intensity);
+            }
+          `,
+          side: THREE.BackSide,
+          blending: THREE.AdditiveBlending,
+          transparent: true,
+          depthWrite: false
+        });
+      }
+    });
+  </script>
 </head>
 
 <body>
-  <a-scene thumbstick-logging >
-    <!-- Asset Management -->
-    <a-assets>
-      <img id="spaceBg" crossorigin="anonymous" src="https://cdn.glitch.global/2023ddae-31f5-4ca3-9362-162b9c1dc5c2/spaceBackground.png?v=1647774931601">
-      <img id="planet" crossorigin="anonymous" src="https://raw.githubusercontent.com/Dbald/Hyperspace-Jump/main/assets/img/tat.png">
-      <a-asset-item id="fleet" type="model" response-type="arraybuffer"
-        src="https://raw.githubusercontent.com/Dbald/Hyperspace-Jump/main/assets/Fleet_Model/rebel_fleet_anim_corevetteview.gltf">
-      </a-asset-item>
+  <a-scene
+    renderer="antialias: true; colorManagement: true; precision: medium"
+    background="color: #02040a"
+    loading-screen="dotsColor: #dce9ff; backgroundColor: #02040a"
+    device-orientation-permission-ui="enabled: true">
+
+    <a-assets timeout="60000">
+      <img id="spaceBg" src="assets/img/spaceBackground.png" crossorigin="anonymous">
+      <img id="planetTexture" src="assets/img/tat.png" crossorigin="anonymous">
+      <a-asset-item id="fleet" src="assets/Fleet_Model/rebel_fleet_optimized.glb"></a-asset-item>
     </a-assets>
-    <!-- Camera -->
-    <a-entity camera="" animation-mixer="clip: CameraAction.001" wasd-controls="" rotation="" look-controls="" aframe-injected="" data-aframe-inspector-original-camera="" position="-2.1085 5.90192 0"></a-entity>
-    <!-- Setup -->
-    <a-gltf-model src="#fleet" animation-mixer="clip: *;"></a-gltf-model>
-    <a-sky id="bg" src="#spaceBg" animation="property: rotation; to: -360 -360 -360; loop: true; dur: 2000000; easing: linear"></a-sky>
-    <a-entity id="lightRigPlanet" rotation="-4.839201537674932 -61.87428525397273 -1.9371703053373133"> 
-      <a-entity light="color: #EEE; intensity: 1.5; angle: 57.24; type: spot" position="-21.56304 1.23138 -10.9419"></a-entity>
-    </a-entity>
-    <a-entity id="lightRigShips" rotation="6.640580845566241 61.77745538659562 177.09323306580563" position="300 -90 0"> 
-      <a-entity light="color: #EEE; intensity: 1.5; angle: 57.24; type: spot" position="-21.56304 1.23138 -10.9419"></a-entity>
-    </a-entity>
-    <a-sphere radius="10" src="#planet" geometry="" position="500 -100 0.06302" scale="20 20 20" animation="property: rotation; to: 0 360 0; loop: true; dur: 300000; easing: linear"></a-sphere>
-    <!-- Meta Quest 2 -->
-    <!-- Controllers -->
-    <a-entity oculus-touch-controls="hand: left"></a-entity>
-    <a-entity oculus-touch-controls="hand: right"></a-entity>
 
+    <a-entity id="viewerRig" position="-2.1085 5.90192 0">
+      <a-camera
+        id="camera"
+        near="0.05"
+        far="5000"
+        wasd-controls="acceleration: 25"
+        look-controls>
+      </a-camera>
+      <a-entity meta-touch-controls="hand: left"></a-entity>
+      <a-entity meta-touch-controls="hand: right"></a-entity>
+    </a-entity>
+
+    <a-gltf-model
+      id="fleetModel"
+      src="#fleet"
+      animation-mixer="clip: *"
+      model-quality>
+    </a-gltf-model>
+
+    <a-sky
+      id="space"
+      src="#spaceBg"
+      radius="3000"
+      material="shader: flat"
+      animation="property: rotation; to: -360 -360 -360; loop: true; dur: 2000000; easing: linear">
+    </a-sky>
+
+    <a-entity light="type: ambient; color: #93a5bd; intensity: 0.28"></a-entity>
+    <a-entity
+      light="type: directional; color: #fff0d6; intensity: 2.0"
+      position="-4 3 -5">
+    </a-entity>
+    <a-entity
+      light="type: directional; color: #6f8fc8; intensity: 0.45"
+      position="5 -2 4">
+    </a-entity>
+
+    <a-sphere
+      id="planet"
+      position="500 -100 0.06302"
+      radius="200"
+      segments-width="128"
+      segments-height="64"
+      material="src: #planetTexture; shader: standard; roughness: 0.9; metalness: 0.02; anisotropy: 8"
+      texture-quality
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 300000; easing: linear">
+    </a-sphere>
+
+    <a-sphere
+      id="planetAtmosphere"
+      position="500 -100 0.06302"
+      radius="207"
+      segments-width="96"
+      segments-height="48"
+      atmosphere-glow="color: #9fc7ff; intensity: 0.72; power: 3.6">
+    </a-sphere>
+
+    <a-sphere
+      id="planetHaze"
+      position="500 -100 0.06302"
+      radius="202"
+      segments-width="64"
+      segments-height="32"
+      material="color: #d5b999; transparent: true; opacity: 0.035; side: back; depthWrite: false">
+    </a-sphere>
   </a-scene>
-  <script>
-      AFRAME.registerComponent('thumbstick-logging',{
-  init: function () {
-    this.el.addEventListener('thumbstickmoved', this.logThumbstick);
-  },
-  logThumbstick: function (evt) {
-    if (evt.detail.y > 0.95) { console.log("DOWN"); }
-    if (evt.detail.y < -0.95) { console.log("UP"); }
-    if (evt.detail.x < -0.95) { console.log("LEFT"); }
-    if (evt.detail.x > 0.95) { console.log("RIGHT"); }
-  }
-});
-    </script>
 </body>
-
 </html>
