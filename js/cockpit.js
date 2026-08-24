@@ -103,10 +103,21 @@ AFRAME.registerComponent('cockpit', {
     // Anchor for the eye. The pilot's own head is where a pilot's eyes are.
     pilot: { default: 'Pilot' },
 
-    // Eye offset from the pilot anchor, in metres, in the ship's frame. The
-    // anchor is the pilot's body centre, so the eye rises to head height.
+    // How far below the crown to sit, in metres. 0.10 is the literal forehead;
+    // the measured canopy on this ship puts its glass centre about 0.31 below
+    // the crown, so this sits between the two — inside the canopy rather than
+    // riding on top of it.
+    foreheadDrop: { default: 0.22 },
+    // How far ahead of the face to place the eye, in metres. Enough to clear
+    // the head geometry without floating out of the cockpit.
+    faceClearance: { default: 0.06 },
+    // Depth of the band below the crown treated as "the head" when finding
+    // the front of the face.
+    headBand: { default: 0.28 },
+
+    // Manual trim on top of the measured position, in metres.
     forward: { default: 0 },
-    up: { default: 0.3 },
+    up: { default: 0 },
     right: { default: 0 },
 
     // Sitting in the seat means sitting inside the pilot's head.
@@ -224,6 +235,11 @@ AFRAME.registerComponent('cockpit', {
 
     this.ship = ship;
     this.parts = parts;
+
+    this.crown = 0;
+    this.face = 0;
+    if (this.updateFrame()) this.measurePilot();
+
     this.ready = true;
     this.el.sceneEl.emit('cockpit-ready', { ship: this.data.ship }, false);
   },
@@ -245,34 +261,93 @@ AFRAME.registerComponent('cockpit', {
     });
   },
 
-  tick: function () {
-    if (!this.ready) return;
-
+  /**
+   * Rebuilds the ship's frame and the pilot anchor from current world state.
+   * Runs once at load to measure the pilot, then every frame to fly the rig.
+   */
+  updateFrame: function () {
     const parts = this.parts;
-    if (!worldCentre(parts.nose, this.nose)) return;
+    if (!worldCentre(parts.nose, this.nose)) return false;
     worldCentre(parts.tail, this.tail);
     worldCentre(parts.dorsal, this.dorsal);
     worldCentre(parts.ventral, this.ventral);
     worldCentre(parts.anchor, this.anchor);
 
     this.forwardAxis.subVectors(this.nose, this.tail);
-    const length = this.forwardAxis.length();
-    if (length < 1e-9) return;
-    this.forwardAxis.divideScalar(length);
+    if (this.forwardAxis.length() < 1e-9) return false;
+    this.forwardAxis.normalize();
 
     // Dorsal minus ventral is a real up vector, not a hint.
     this.upAxis.subVectors(this.dorsal, this.ventral);
     this.rightAxis.crossVectors(this.forwardAxis, this.upAxis);
-    if (this.rightAxis.lengthSq() < 1e-18) return;
+    if (this.rightAxis.lengthSq() < 1e-18) return false;
     this.rightAxis.normalize();
     this.upAxis.crossVectors(this.rightAxis, this.forwardAxis).normalize();
 
+    return true;
+  },
+
+  /**
+   * Finds the pilot's crown and the front of their face, as distances from
+   * their centre along the ship's up and forward axes.
+   *
+   * Measured from the mesh itself rather than assumed, and the face is taken
+   * only from vertices near the crown: a seated pilot's knees reach further
+   * forward than their nose, so measuring the whole body would put the camera
+   * out past the kneecaps.
+   */
+  measurePilot: function () {
+    const vertex = new THREE.Vector3();
+    const delta = new THREE.Vector3();
+    const samples = [];
+    let crown = -Infinity;
+
+    this.parts.anchor.updateWorldMatrix(true, true);
+    this.parts.anchor.traverse((node) => {
+      if (!node.isMesh || !node.geometry) return;
+      const position = node.geometry.getAttribute('position');
+      if (!position) return;
+
+      for (let i = 0; i < position.count; i++) {
+        vertex.fromBufferAttribute(position, i).applyMatrix4(node.matrixWorld);
+        delta.subVectors(vertex, this.anchor);
+        const along = delta.dot(this.upAxis);
+        const ahead = delta.dot(this.forwardAxis);
+        if (along > crown) crown = along;
+        samples.push(along, ahead);
+      }
+    });
+
+    if (!samples.length) return false;
+
+    // Head band: the top of the body, where the face is.
+    const band = crown - this.data.headBand * this.unitsPerMetre;
+    let face = -Infinity;
+    for (let i = 0; i < samples.length; i += 2) {
+      if (samples[i] >= band && samples[i + 1] > face) face = samples[i + 1];
+    }
+
+    this.crown = crown;
+    this.face = Number.isFinite(face) ? face : 0;
+    return true;
+  },
+
+  tick: function () {
+    if (!this.ready) return;
+    if (!this.updateFrame()) return;
+
     const unitsPerMetre = this.unitsPerMetre;
 
+    // Eye height: just below the crown, where a forehead is. Eye depth: just
+    // ahead of the face, so the view is inside the cockpit without being
+    // inside the pilot's head.
+    const rise = this.crown - this.data.foreheadDrop * unitsPerMetre;
+    const reach = this.face + this.data.faceClearance * unitsPerMetre;
+
     this.eye.copy(this.anchor)
-      .addScaledVector(this.forwardAxis, this.data.forward * unitsPerMetre)
-      .addScaledVector(this.rightAxis, this.data.right * unitsPerMetre)
-      .addScaledVector(this.upAxis, this.data.up * unitsPerMetre);
+      .addScaledVector(this.upAxis, rise + this.data.up * unitsPerMetre)
+      .addScaledVector(this.forwardAxis, reach + this.data.forward * unitsPerMetre)
+      .addScaledVector(this.rightAxis, this.data.right * unitsPerMetre);
 
     // A-Frame cameras look down -Z, so the ship's forward is the rig's -Z.
     this.basis.makeBasis(
@@ -294,6 +369,8 @@ AFRAME.registerComponent('cockpit', {
         ship: this.data.ship,
         shipLengthWorldUnits: r(this.shipLength),
         unitsPerMetre: r(this.unitsPerMetre),
+        crownAbovePilotCentreMetres: r(this.crown / this.unitsPerMetre),
+        faceAheadOfPilotCentreMetres: r(this.face / this.unitsPerMetre),
         forwardAxis: this.forwardAxis.toArray().map(r),
         upAxis: this.upAxis.toArray().map(r),
         nose: this.nose.toArray().map(r),

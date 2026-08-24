@@ -153,11 +153,36 @@ metres, which pushes `near:far` past a million to one. That is what the
 `js/` carries the `logdepthbuf` chunks: materials that do not opt in render at
 the wrong depth.
 
-### Tuning the eye position
+### Where the eye sits
 
-The eye sits at the pilot's body centre plus an offset to head height. That
-offset is a judgement call that wants a real headset. With
-`cockpit="tune: true"`, arrow keys move fore/aft and left/right,
+Just ahead of the pilot's forehead: inside the cockpit, but not inside their
+head. Both reference points are measured from the pilot mesh rather than
+assumed, in the ship's own frame:
+
+| measurement | A-wing |
+| --- | --- |
+| crown, above the pilot's centre | 0.685 m |
+| face, ahead of the pilot's centre | −0.17 m |
+
+The face reads as *behind* the body centre because a seated pilot's torso and
+knees sit forward of their head. For the same reason the front of the face is
+taken only from vertices within `headBand` of the crown — measuring the whole
+body would put the camera out past the kneecaps.
+
+From there the eye drops `foreheadDrop` below the crown and stands
+`faceClearance` ahead of the face. The resulting position, relative to the eye:
+
+| part | ahead | above |
+| --- | --- | --- |
+| canopy glass | 0.41 m | −0.09 m |
+| console | 0.40 m | −0.52 m |
+| seat | −0.41 m | −0.50 m |
+
+`foreheadDrop` is the one knob worth touching. At 0.10 the eye is at the
+literal forehead and rides above the canopy glass; at about 0.31 it is level
+with the glass centre. The default sits between them.
+
+With `cockpit="tune: true"`, arrow keys move fore/aft and left/right,
 PageUp/PageDown move up/down, and each nudge logs values to paste back into the
 schema defaults.
 
