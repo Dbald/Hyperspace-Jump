@@ -16,12 +16,13 @@
   <script src="js/planet.js"></script>
   <script src="js/starfield.js"></script>
   <script src="js/hyperspace.js"></script>
+  <script src="js/cockpit.js"></script>
   <script src="js/model-quality.js"></script>
 </head>
 
 <body>
   <a-scene
-    renderer="antialias: true; colorManagement: true; precision: medium; foveationLevel: 1; toneMapping: ACESFilmic; exposure: 1.15; anisotropy: 8"
+    renderer="antialias: true; colorManagement: true; precision: medium; foveationLevel: 1; logarithmicDepthBuffer: true; toneMapping: ACESFilmic; exposure: 1.15; anisotropy: 8"
     gltf-model="dracoDecoderPath: assets/vendor/draco/"
     sun="direction: -0.36 0.30 -0.88; color: #fff4e0; intensity: 2.6; ambientColor: #5c7091; ambientIntensity: 0.32"
     background="color: #02040a"
@@ -37,12 +38,14 @@
       <a-asset-item id="fleet" src="assets/Fleet_Model/rebel_fleet_optimized.glb"></a-asset-item>
     </a-assets>
 
-    <a-entity id="viewerRig" position="-2.1085 5.90192 0">
+    <a-entity
+      id="viewerRig"
+      position="-2.1085 5.90192 0"
+      cockpit="model: #fleetModel; tune: true">
       <a-camera
         id="camera"
         near="0.05"
-        far="5000"
-        wasd-controls="acceleration: 25"
+        far="200000"
         look-controls>
       </a-camera>
       <a-entity meta-touch-controls="hand: left"></a-entity>

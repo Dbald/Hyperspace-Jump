@@ -19,6 +19,9 @@ const STAR_VERTEX = `
   varying vec3 vColor;
   varying float vTwinkle;
 
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
   void main() {
     vColor = color * uOpacity;
     // Scintillation, at a different rate per star.
@@ -26,6 +29,7 @@ const STAR_VERTEX = `
 
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * viewPosition;
+    #include <logdepthbuf_vertex>
     gl_PointSize = aSize * uPixelRatio;
   }
 `;
@@ -34,7 +38,11 @@ const STAR_FRAGMENT = `
   varying vec3 vColor;
   varying float vTwinkle;
 
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
   void main() {
+    #include <logdepthbuf_fragment>
     // Soft round profile with a brighter core, so bright stars read as points
     // with a little bloom rather than as squares.
     float distance = length(gl_PointCoord - vec2(0.5));

@@ -18,6 +18,7 @@ Scene code lives in `js/`:
 
 | file | what it does |
 | --- | --- |
+| `js/cockpit.js` | `cockpit` component: straps the viewer into an X-wing and locks out free flight |
 | `js/hyperspace.js` | `hyperspace` component: the five-phase jump sequence — streaks, throat, flash |
 | `js/sun.js` | `sun` system: one shared star direction, plus `sun-light` to place the key and fill lights along it |
 | `js/planet.js` | `planet` component: PBR surface, drifting cloud deck, ray-marched atmosphere |
@@ -101,6 +102,51 @@ The backdrop alone went from an 8.37 MB PNG to a 91 KB WebP.
 - **Stars** — 5,000 point sprites with weighted main-sequence colours. Baking
   them into the sky texture would need roughly a 16k equirect map to survive
   mipmapping.
+
+## The cockpit
+
+`js/cockpit.js` puts the viewer in an X-wing seat. Three things about the source
+model shape how it works.
+
+**The hierarchy is flat.** There is no per-ship group node to parent to. All 180
+parts are siblings under one container, each carrying its own baked transform
+and its own animation track. So the rig is driven each frame rather than
+reparented — reparenting would also inherit the container's non-uniform scale
+and shrink the viewer.
+
+**Every part of a ship shares one transform.** The layout between them lives in
+the vertex data, so `getWorldPosition` returns exactly the same point for the
+nose as for the tail. Parts are located by the world-space centre of their
+bounding box instead. (Missing this cost a debugging pass: the nose-to-tail
+vector came out as a zero-length vector, and the guard against that silently
+skipped the whole component every frame.)
+
+**Orientation cannot be read off the matrix.** Decomposing a world matrix
+beneath non-uniform scale yields a sheared quaternion, so the ship's frame is
+rebuilt from three known world points — nose, tail and R2's dome — and
+orthonormalised.
+
+### Scale
+
+The X-wing is **0.471 world units** nose to tail. Taking it as 12.5 m real,
+one world unit is about 26 m, and the rig is scaled by the resulting
+`unitsPerMetre` (≈0.0376) so a real metre of head movement maps to a metre of
+ship. Without that the viewer is a giant beside a 47 cm toy, and the whole
+cockpit falls inside the near plane — the first working build looked straight
+through the hull into space.
+
+Scaling the rig means the far plane has to cover the sky measured in player
+metres, which pushes `near:far` past a million to one. That is what the
+`logarithmicDepthBuffer` renderer flag is for, and why every custom shader in
+`js/` carries the `logdepthbuf` chunks: materials that do not opt in render at
+the wrong depth.
+
+### Tuning the eye position
+
+Where a pilot's eyes sit is a judgement call that needs a real headset, not a
+number derived from a bounding box. With `cockpit="tune: true"`, arrow keys move
+fore/aft and left/right, PageUp/PageDown move up/down, and each nudge logs
+values to paste back into the schema defaults.
 
 ## The jump
 

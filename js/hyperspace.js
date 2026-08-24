@@ -34,6 +34,9 @@ const STREAK_VERTEX = `
   varying float vAcross;
   varying float vFade;
 
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
   void main() {
     // Scroll along the travel axis, wrapping within the tunnel volume so a
     // fixed set of streaks reads as an endless stream.
@@ -71,6 +74,7 @@ const STREAK_VERTEX = `
     vFade = 1.0 - smoothstep(0.55, 1.0, abs(z) / (uSpan * 0.5));
 
     gl_Position = projectionMatrix * position;
+    #include <logdepthbuf_vertex>
   }
 `;
 
@@ -83,7 +87,11 @@ const STREAK_FRAGMENT = `
   varying float vAcross;
   varying float vFade;
 
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
   void main() {
+    #include <logdepthbuf_fragment>
     // Streaks scroll toward -Z, so vAlong = 0 is the leading tip.
     float lead = 1.0 - vAlong;
 
@@ -111,9 +119,13 @@ const STREAK_FRAGMENT = `
 
 const GLOW_VERTEX = `
   varying vec2 vUv;
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
   void main() {
     vUv = uv;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
   }
 `;
 
@@ -124,7 +136,11 @@ const GLOW_FRAGMENT = `
 
   varying vec2 vUv;
 
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
   void main() {
+    #include <logdepthbuf_fragment>
     float distance = length(vUv - vec2(0.5)) * 2.0;
     float halo = 1.0 - smoothstep(0.0, 1.0, distance);
     float core = 1.0 - smoothstep(0.0, 0.28, distance);
@@ -146,7 +162,11 @@ const FLASH_FRAGMENT = `
 
   varying vec2 vUv;
 
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
   void main() {
+    #include <logdepthbuf_fragment>
     // Brightest at centre so the flash blooms outward rather than reading as
     // a flat white card.
     float distance = length(vUv - vec2(0.5)) * 2.0;
