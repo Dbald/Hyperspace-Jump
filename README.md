@@ -68,6 +68,26 @@ A-Frame version changes:
 npm run vendor:draco
 ```
 
+### Cockpit textures
+
+`npm run build:cockpit` generates the interior set, procedurally, in the same
+style as the planet maps:
+
+| generated file | size | what it is |
+| --- | --- | --- |
+| `cockpit_panel_color.webp` | 1024² | tiling hull plating — irregular panels, seams, fasteners, edge wear |
+| `cockpit_panel_roughness.webp` | 1024² | worn edges polish up, grimy centres stay matte |
+| `cockpit_panel_normal.webp` | 1024² | panel relief and recessed seams |
+| `cockpit_console_color.webp` | 2048×1024 | instrument fascia — screens and switchgear |
+| `cockpit_console_emissive.webp` | 2048×1024 | the lit parts only: screens and indicator LEDs |
+
+The panels tile: opposite edges are cross-faded, and the panel grid wraps.
+
+The console ships an emissive map because a cockpit lit by its own instruments
+reads far better than a flatly lit one, and it disguises how little geometry
+the interior actually has. Wire it to `emissiveMap` with `emissive` white and
+`emissiveIntensity` around 1, and light the cabin dimly.
+
 ### Planet and sky textures
 
 `npm run build:textures` derives the map set the scene samples from the two
