@@ -101,6 +101,15 @@ AFRAME.registerComponent('cockpit', {
     // Blank matches the first camera in the ship. Set to "none" to ignore.
     viewpoint: { default: 'CockpitCam' },
 
+    // An explicit viewpoint, in the model's own local space, for when the
+    // camera could not be exported but its transform is known. Blender's
+    // numbers convert as (x, z, -y); a Blender camera looking down -Y ends up
+    // yawed 180 here, because glTF and A-Frame cameras look down -Z.
+    //
+    // Used only when non-zero, and only if no viewpoint node was found.
+    viewpointPosition: { type: 'vec3', default: { x: 0, y: 0, z: 0 } },
+    viewpointRotation: { type: 'vec3', default: { x: 0, y: 0, z: 0 } },
+
     // Landmarks used to build the ship's frame, matched within its subtree.
     nose: { default: 'Hull_Front' },
     tail: { default: 'Hull_Rear_1' },
@@ -261,6 +270,18 @@ AFRAME.registerComponent('cockpit', {
       pilot.traverse((node) => { if (node.isMesh) node.visible = false; });
     }
 
+    // Ship scale is measured on both paths. A viewpoint node's own world
+    // scale is only the right rig scale when the model is authored in metres;
+    // deriving it from the hull against a known real length is grounded in
+    // something physical, so it wins when available.
+    const worldScale = new THREE.Vector3();
+    ship.getWorldScale(worldScale);
+    const hullExtents = localExtents(ship);
+    if (hullExtents) {
+      this.shipLength = hullExtents.longest * worldScale.x;
+      this.unitsPerMetre = this.shipLength / SHIP_LENGTH_METRES;
+    }
+
     if (this.viewpoint) {
       this.ship = ship;
       this.parts = { anchor: pilot };
@@ -290,14 +311,6 @@ AFRAME.registerComponent('cockpit', {
       return;
     }
 
-    // Uniform scale, so one number converts local extents into world units.
-    const worldScale = new THREE.Vector3();
-    ship.getWorldScale(worldScale);
-
-    const hull = localExtents(ship);
-    this.shipLength = hull ? hull.longest * worldScale.x : 0;
-    this.unitsPerMetre = this.shipLength / SHIP_LENGTH_METRES;
-
     this.ship = ship;
     this.parts = parts;
 
@@ -318,6 +331,9 @@ AFRAME.registerComponent('cockpit', {
    * transform transfers with no correction.
    */
   findViewpoint: function (ship) {
+    const explicit = this.makeExplicitViewpoint();
+    if (explicit) return explicit;
+
     const wanted = this.data.viewpoint;
     if (!wanted || wanted === 'none') return null;
 
@@ -331,6 +347,33 @@ AFRAME.registerComponent('cockpit', {
     });
 
     return named || firstCamera;
+  },
+
+  /**
+   * Builds a viewpoint from explicit coordinates.
+   *
+   * Parented to the model root rather than the ship node, because the
+   * coordinates come from the modelling tool's world space, which is what the
+   * glTF root corresponds to.
+   */
+  makeExplicitViewpoint: function () {
+    const p = this.data.viewpointPosition;
+    const r = this.data.viewpointRotation;
+    if (!p || (p.x === 0 && p.y === 0 && p.z === 0)) return null;
+
+    const root = this.data.model.getObject3D('mesh');
+    if (!root) return null;
+
+    const node = new THREE.Object3D();
+    node.name = 'ExplicitViewpoint';
+    node.position.set(p.x, p.y, p.z);
+    node.rotation.set(
+      THREE.MathUtils.degToRad(r.x),
+      THREE.MathUtils.degToRad(r.y),
+      THREE.MathUtils.degToRad(r.z)
+    );
+    root.add(node);
+    return node;
   },
 
   /**
@@ -496,7 +539,11 @@ AFRAME.registerComponent('cockpit', {
 
     rig.position.copy(this.eye);
     rig.quaternion.copy(this.orientation);
-    if (this.data.matchScale && this.viewScale.x > 0) rig.scale.setScalar(this.viewScale.x);
+
+    if (this.data.matchScale) {
+      const scale = this.unitsPerMetre > 0 ? this.unitsPerMetre : this.viewScale.x;
+      if (scale > 0) rig.scale.setScalar(scale);
+    }
 
     // Adopt the authored field of view on flat screens. In VR the headset
     // dictates it, and overriding would distort the view.
@@ -511,7 +558,8 @@ AFRAME.registerComponent('cockpit', {
         viewpoint: this.viewpoint.name,
         isCamera: !!this.viewpoint.isCamera,
         fov: this.viewpoint.isCamera ? this.viewpoint.fov : null,
-        rigScale: Number(this.viewScale.x.toFixed(5)),
+        viewpointWorldScale: Number(this.viewScale.x.toFixed(5)),
+        rigScale: Number((this.unitsPerMetre || this.viewScale.x).toFixed(5)),
         position: this.eye.toArray().map((v) => Number(v.toFixed(3)))
       }));
     }
@@ -543,10 +591,36 @@ AFRAME.registerComponent('cockpit', {
     event.preventDefault();
 
     const [axis, delta] = move;
+
+    // With a viewpoint in use the measured offsets are not consulted, so the
+    // node itself has to move. Its position is in the model's local space, so
+    // the step is converted out of metres first.
+    if (this.viewpoint) {
+      const step = delta * (this.unitsPerMetre > 0 ? this.unitsPerMetre : 1) / this.viewpointScale();
+      const local = { forward: 'z', up: 'y', right: 'x' }[axis];
+      // The viewpoint faces the ship's nose, which is the model's +Z, so
+      // moving "forward" increases z.
+      this.viewpoint.position[local] += step;
+      this.viewpoint.updateMatrixWorld(true);
+      const p = this.viewpoint.position;
+      console.log(
+        `[cockpit] viewpointPosition: ${p.x.toFixed(4)} ${p.y.toFixed(4)} ${p.z.toFixed(4)}`
+      );
+      return;
+    }
+
     this.el.setAttribute('cockpit', axis, Number((this.data[axis] + delta).toFixed(3)));
     console.log(
       `[cockpit] forward: ${this.data.forward}; up: ${this.data.up}; right: ${this.data.right}`
     );
+  },
+
+  /** World scale of whatever the viewpoint hangs off, for converting steps. */
+  viewpointScale: function () {
+    if (!this.viewpoint || !this.viewpoint.parent) return 1;
+    const scale = new THREE.Vector3();
+    this.viewpoint.parent.getWorldScale(scale);
+    return scale.x || 1;
   },
 
   remove: function () {

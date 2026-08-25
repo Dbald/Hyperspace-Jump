@@ -229,6 +229,24 @@ childless camera exported with that box unchecked disappears entirely.
 Cameras survive `npm run optimize:model` intact — transform and field of view
 both — so an authored viewpoint can ship through the build.
 
+### Placing the eye by hand
+
+`viewpointPosition` and `viewpointRotation` place the eye at explicit
+coordinates in the model's own space, for when a camera was framed in the
+modelling tool but could not be exported. Blender's numbers convert as
+`(x, z, -y)`, and a Blender camera looking down `-Y` ends up yawed 180 here,
+because glTF and A-Frame cameras look down `-Z`.
+
+Under `tune: true`, the arrow and page keys move the viewpoint node itself and
+log the resulting coordinates, ready to paste back into the schema. Steps are
+given in metres and converted into model space, so they mean the same thing
+whatever the model's scale.
+
+This is a stand-in, not a replacement for exporting the camera. Reconstructing
+a transform from a screenshot cannot confirm the modelling scene's unit scale
+or whether the camera had a parent, so an exported camera is always the more
+reliable source.
+
 ### Field of view
 
 `cockpit`'s `fov` sets the flat-screen vertical field of view; a headset always

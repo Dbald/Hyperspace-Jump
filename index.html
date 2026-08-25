@@ -42,7 +42,14 @@
     <a-entity
       id="viewerRig"
       position="-2.1085 5.90192 0"
-      cockpit="model: #playerShip; ship: A-Wing; tune: true; debug: true">
+      cockpit="
+        model: #playerShip;
+        ship: A-Wing;
+        viewpointPosition: 0.25884 1.7 0.4672;
+        viewpointRotation: 0 180 0;
+        fov: 80;
+        tune: true;
+        debug: true">
       <a-camera
         id="camera"
         near="0.05"
