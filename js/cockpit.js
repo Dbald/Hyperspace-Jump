@@ -95,6 +95,12 @@ AFRAME.registerComponent('cockpit', {
     ship: { default: 'A-Wing.001' },
     model: { type: 'selector' },
 
+    // An authored viewpoint — a camera or empty placed in the modelling tool
+    // at the seat. When the model provides one it wins outright: someone
+    // framed that shot deliberately, and no amount of measuring beats it.
+    // Blank matches the first camera in the ship. Set to "none" to ignore.
+    viewpoint: { default: 'CockpitCam' },
+
     // Landmarks used to build the ship's frame, matched within its subtree.
     nose: { default: 'Hull_Front' },
     tail: { default: 'Hull_Rear_1' },
@@ -150,6 +156,9 @@ AFRAME.registerComponent('cockpit', {
     this.basis = new THREE.Matrix4();
     this.orientation = new THREE.Quaternion();
     this.eye = new THREE.Vector3();
+    this.viewScale = new THREE.Vector3(1, 1, 1);
+    this.viewpoint = null;
+    this.fovApplied = false;
 
     this.onModelLoaded = this.onModelLoaded.bind(this);
     this.onTuneKey = this.onTuneKey.bind(this);
@@ -205,25 +214,46 @@ AFRAME.registerComponent('cockpit', {
       return hit;
     };
 
+    if (this.data.doubleSidedCockpit) this.openUpCockpit(ship);
+
+    // An authored viewpoint settles everything the seat needs, so it is
+    // checked before the landmark machinery — a purpose-built ship has no hull
+    // landmarks to find, and must not be blocked waiting for them.
+    this.viewpoint = this.findViewpoint(ship);
+
+    const pilot = findInShip(this.data.pilot);
+    if (pilot && this.data.hidePilot) {
+      pilot.traverse((node) => { if (node.isMesh) node.visible = false; });
+    }
+
+    if (this.viewpoint) {
+      this.ship = ship;
+      this.parts = { anchor: pilot };
+      this.ready = true;
+      this.el.sceneEl.emit('cockpit-ready', {
+        ship: this.data.ship,
+        viewpoint: this.viewpoint.name
+      }, false);
+      return;
+    }
+
+    // No viewpoint: fall back to locating the seat from hull landmarks.
     const parts = {
       nose: findInShip(this.data.nose),
       tail: findInShip(this.data.tail),
       dorsal: findInShip(this.data.dorsal),
       ventral: findInShip(this.data.ventral),
-      anchor: findInShip(this.data.pilot)
+      anchor: pilot
     };
 
     const missing = Object.entries(parts).filter(([, n]) => !n).map(([k]) => k);
     if (missing.length) {
-      console.warn(`cockpit: ${this.data.ship} is missing ${missing.join(', ')}`);
+      console.warn(
+        `cockpit: ${this.data.ship} has no "${this.data.viewpoint}" viewpoint, ` +
+        `and is missing ${missing.join(', ')} for the fallback`
+      );
       return;
     }
-
-    if (this.data.hidePilot) {
-      parts.anchor.traverse((node) => { if (node.isMesh) node.visible = false; });
-    }
-
-    if (this.data.doubleSidedCockpit) this.openUpCockpit(ship);
 
     // Uniform scale, so one number converts local extents into world units.
     const worldScale = new THREE.Vector3();
@@ -242,6 +272,30 @@ AFRAME.registerComponent('cockpit', {
 
     this.ready = true;
     this.el.sceneEl.emit('cockpit-ready', { ship: this.data.ship }, false);
+  },
+
+  /**
+   * Finds an authored viewpoint inside the ship.
+   *
+   * A camera exported from the modelling tool carries position, orientation
+   * and field of view together, which is everything the seat needs. Cameras
+   * and A-Frame agree on convention — both look down -Z with +Y up — so the
+   * transform transfers with no correction.
+   */
+  findViewpoint: function (ship) {
+    const wanted = this.data.viewpoint;
+    if (!wanted || wanted === 'none') return null;
+
+    const target = sanitizeName(wanted);
+    let named = null;
+    let firstCamera = null;
+
+    ship.traverse((node) => {
+      if (!firstCamera && node.isCamera) firstCamera = node;
+      if (!named && node.name && node.name.startsWith(target)) named = node;
+    });
+
+    return named || firstCamera;
   },
 
   /**
@@ -334,6 +388,12 @@ AFRAME.registerComponent('cockpit', {
 
   tick: function () {
     if (!this.ready) return;
+
+    if (this.viewpoint) {
+      this.followViewpoint();
+      return;
+    }
+
     if (!this.updateFrame()) return;
 
     const unitsPerMetre = this.unitsPerMetre;
@@ -378,6 +438,49 @@ AFRAME.registerComponent('cockpit', {
         dorsal: this.dorsal.toArray().map(r),
         ventral: this.ventral.toArray().map(r),
         pilotAnchor: this.anchor.toArray().map(r)
+      }));
+    }
+  },
+
+  /**
+   * Rides an authored viewpoint node.
+   *
+   * The node's transform becomes the rig's, so head tracking composes on top
+   * of the authored framing rather than fighting it — a fixed camera cannot be
+   * used directly in VR, where the headset owns the pose.
+   *
+   * Its world scale is also the right rig scale: if the ship is authored in
+   * metres and then scaled into the scene, that same factor is what converts a
+   * real metre of head movement into world units.
+   */
+  followViewpoint: function () {
+    const rig = this.el.object3D;
+
+    this.viewpoint.updateWorldMatrix(true, false);
+    this.viewpoint.matrixWorld.decompose(this.eye, this.orientation, this.viewScale);
+
+    rig.position.copy(this.eye);
+    rig.quaternion.copy(this.orientation);
+    if (this.data.matchScale && this.viewScale.x > 0) rig.scale.setScalar(this.viewScale.x);
+
+    // Adopt the authored field of view on flat screens. In VR the headset
+    // dictates it, and overriding would distort the view.
+    if (this.viewpoint.isCamera && !this.el.sceneEl.is('vr-mode') && !this.fovApplied) {
+      const cameraEl = this.el.sceneEl.camera && this.el.sceneEl.camera.el;
+      if (cameraEl) {
+        cameraEl.setAttribute('camera', 'fov', this.viewpoint.fov);
+        this.fovApplied = true;
+      }
+    }
+
+    if (this.data.debug && !this.logged) {
+      this.logged = true;
+      console.log('[cockpit]', JSON.stringify({
+        viewpoint: this.viewpoint.name,
+        isCamera: !!this.viewpoint.isCamera,
+        fov: this.viewpoint.isCamera ? this.viewpoint.fov : null,
+        rigScale: Number(this.viewScale.x.toFixed(5)),
+        position: this.eye.toArray().map((v) => Number(v.toFixed(3)))
       }));
     }
   },

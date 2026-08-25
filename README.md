@@ -153,7 +153,41 @@ metres, which pushes `near:far` past a million to one. That is what the
 `js/` carries the `logdepthbuf` chunks: materials that do not opt in render at
 the wrong depth.
 
+### Authored viewpoints
+
+If the ship carries a node named by `viewpoint` — a camera or an empty placed
+at the seat in the modelling tool — it wins outright, and everything below is
+skipped. Someone framed that shot deliberately; no amount of measuring beats
+it.
+
+A camera is the best form, carrying position, orientation and field of view in
+one node. glTF cameras and A-Frame agree on convention — both look down −Z with
++Y up — so the transform transfers with no correction.
+
+Three details matter:
+
+- **The transform is copied to the rig, not used as the camera.** In VR the
+  headset owns the pose, so a fixed camera would fight head tracking. Copying
+  it to the rig makes the authored framing the seated origin, with head look
+  composing on top.
+- **Its world scale becomes the rig scale.** A ship authored in metres and then
+  scaled into the scene carries exactly the factor needed to convert a real
+  metre of head movement into world units.
+- **The field of view is adopted on flat screens only.** In VR the headset
+  dictates it and overriding would distort the view.
+
+Blender's glTF exporter has a **Cameras** option that is easy to leave off. The
+fleet model in this repository was exported that way: it has a node named
+`Camera` and a `CameraAction` animation, but zero camera definitions. A
+childless camera exported with that box unchecked disappears entirely.
+
+Cameras survive `npm run optimize:model` intact — transform and field of view
+both — so an authored viewpoint can ship through the build.
+
 ### Where the eye sits
+
+Used only when the model provides no authored viewpoint.
+
 
 Just ahead of the pilot's forehead: inside the cockpit, but not inside their
 head. Both reference points are measured from the pilot mesh rather than
