@@ -68,6 +68,51 @@ A-Frame version changes:
 npm run vendor:draco
 ```
 
+### The player's ship
+
+`assets/Player_Ship/` holds the A-wing the viewer flies. It is deliberately
+separate from the fleet: the fleet is a baked animation, and this ship has to
+be driveable.
+
+```bash
+npm run optimize:ship
+```
+
+4.44 MB source to **0.53 MB**, 88% smaller, with all 24 meshes, 22 materials
+and 20 textures intact.
+
+Two things to know about it:
+
+- **It has no pilot.** The `Pilot` node is an empty, and the optimizer prunes
+  it as a dead leaf, so the cockpit component falls back to anchoring on the
+  `Seat`.
+- **It is authored at real size**, about 9.6 m nose to tail, or 2.7 world units
+  per metre. The rest of the scene is authored at roughly 0.028 units per
+  metre, so the entity carries a `scale` of 0.0104 to match. Its own authoring
+  is the correct one; scaling the ship is simply cheaper than rescaling the
+  planet, sky, starfield and jump tunnel, all of which are tuned to the
+  existing world.
+
+### Cockpit textures
+
+`npm run build:cockpit` generates the interior set, procedurally, in the same
+style as the planet maps:
+
+| generated file | size | what it is |
+| --- | --- | --- |
+| `cockpit_panel_color.webp` | 1024² | tiling hull plating — irregular panels, seams, fasteners, edge wear |
+| `cockpit_panel_roughness.webp` | 1024² | worn edges polish up, grimy centres stay matte |
+| `cockpit_panel_normal.webp` | 1024² | panel relief and recessed seams |
+| `cockpit_console_color.webp` | 2048×1024 | instrument fascia — screens and switchgear |
+| `cockpit_console_emissive.webp` | 2048×1024 | the lit parts only: screens and indicator LEDs |
+
+The panels tile: opposite edges are cross-faded, and the panel grid wraps.
+
+The console ships an emissive map because a cockpit lit by its own instruments
+reads far better than a flatly lit one, and it disguises how little geometry
+the interior actually has. Wire it to `emissiveMap` with `emissive` white and
+`emissiveIntensity` around 1, and light the cabin dimly.
+
 ### Planet and sky textures
 
 `npm run build:textures` derives the map set the scene samples from the two
@@ -153,11 +198,70 @@ metres, which pushes `near:far` past a million to one. That is what the
 `js/` carries the `logdepthbuf` chunks: materials that do not opt in render at
 the wrong depth.
 
-### Tuning the eye position
+### Authored viewpoints
 
-The eye sits at the pilot's body centre plus an offset to head height. That
-offset is a judgement call that wants a real headset. With
-`cockpit="tune: true"`, arrow keys move fore/aft and left/right,
+If the ship carries a node named by `viewpoint` — a camera or an empty placed
+at the seat in the modelling tool — it wins outright, and everything below is
+skipped. Someone framed that shot deliberately; no amount of measuring beats
+it.
+
+A camera is the best form, carrying position, orientation and field of view in
+one node. glTF cameras and A-Frame agree on convention — both look down −Z with
++Y up — so the transform transfers with no correction.
+
+Three details matter:
+
+- **The transform is copied to the rig, not used as the camera.** In VR the
+  headset owns the pose, so a fixed camera would fight head tracking. Copying
+  it to the rig makes the authored framing the seated origin, with head look
+  composing on top.
+- **Its world scale becomes the rig scale.** A ship authored in metres and then
+  scaled into the scene carries exactly the factor needed to convert a real
+  metre of head movement into world units.
+- **The field of view is adopted on flat screens only.** In VR the headset
+  dictates it and overriding would distort the view.
+
+Blender's glTF exporter has a **Cameras** option that is easy to leave off. The
+fleet model in this repository was exported that way: it has a node named
+`Camera` and a `CameraAction` animation, but zero camera definitions. A
+childless camera exported with that box unchecked disappears entirely.
+
+Cameras survive `npm run optimize:model` intact — transform and field of view
+both — so an authored viewpoint can ship through the build.
+
+### Where the eye sits
+
+Used only when the model provides no authored viewpoint.
+
+
+Just ahead of the pilot's forehead: inside the cockpit, but not inside their
+head. Both reference points are measured from the pilot mesh rather than
+assumed, in the ship's own frame:
+
+| measurement | A-wing |
+| --- | --- |
+| crown, above the pilot's centre | 0.685 m |
+| face, ahead of the pilot's centre | −0.17 m |
+
+The face reads as *behind* the body centre because a seated pilot's torso and
+knees sit forward of their head. For the same reason the front of the face is
+taken only from vertices within `headBand` of the crown — measuring the whole
+body would put the camera out past the kneecaps.
+
+From there the eye drops `foreheadDrop` below the crown and stands
+`faceClearance` ahead of the face. The resulting position, relative to the eye:
+
+| part | ahead | above |
+| --- | --- | --- |
+| canopy glass | 0.41 m | −0.09 m |
+| console | 0.40 m | −0.52 m |
+| seat | −0.41 m | −0.50 m |
+
+`foreheadDrop` is the one knob worth touching. At 0.10 the eye is at the
+literal forehead and rides above the canopy glass; at about 0.31 it is level
+with the glass centre. The default sits between them.
+
+With `cockpit="tune: true"`, arrow keys move fore/aft and left/right,
 PageUp/PageDown move up/down, and each nudge logs values to paste back into the
 schema defaults.
 

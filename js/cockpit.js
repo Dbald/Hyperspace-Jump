@@ -95,18 +95,39 @@ AFRAME.registerComponent('cockpit', {
     ship: { default: 'A-Wing.001' },
     model: { type: 'selector' },
 
+    // An authored viewpoint — a camera or empty placed in the modelling tool
+    // at the seat. When the model provides one it wins outright: someone
+    // framed that shot deliberately, and no amount of measuring beats it.
+    // Blank matches the first camera in the ship. Set to "none" to ignore.
+    viewpoint: { default: 'CockpitCam' },
+
     // Landmarks used to build the ship's frame, matched within its subtree.
     nose: { default: 'Hull_Front' },
     tail: { default: 'Hull_Rear_1' },
     dorsal: { default: 'Hull_Dorsal' },
     ventral: { default: 'Hull_Ventral' },
-    // Anchor for the eye. The pilot's own head is where a pilot's eyes are.
+    // Anchor for the eye when no viewpoint is authored. Prefers the pilot,
+    // whose head is where a pilot's eyes are; falls back to the seat, which is
+    // all an emptied cockpit has. An empty Pilot node does not survive the
+    // optimizer, which prunes it as a dead leaf.
     pilot: { default: 'Pilot' },
+    seat: { default: 'Seat' },
 
-    // Eye offset from the pilot anchor, in metres, in the ship's frame. The
-    // anchor is the pilot's body centre, so the eye rises to head height.
+    // How far below the crown to sit, in metres. 0.10 is the literal forehead;
+    // the measured canopy on this ship puts its glass centre about 0.31 below
+    // the crown, so this sits between the two — inside the canopy rather than
+    // riding on top of it.
+    foreheadDrop: { default: 0.22 },
+    // How far ahead of the face to place the eye, in metres. Enough to clear
+    // the head geometry without floating out of the cockpit.
+    faceClearance: { default: 0.06 },
+    // Depth of the band below the crown treated as "the head" when finding
+    // the front of the face.
+    headBand: { default: 0.28 },
+
+    // Manual trim on top of the measured position, in metres.
     forward: { default: 0 },
-    up: { default: 0.3 },
+    up: { default: 0 },
     right: { default: 0 },
 
     // Sitting in the seat means sitting inside the pilot's head.
@@ -139,6 +160,9 @@ AFRAME.registerComponent('cockpit', {
     this.basis = new THREE.Matrix4();
     this.orientation = new THREE.Quaternion();
     this.eye = new THREE.Vector3();
+    this.viewScale = new THREE.Vector3(1, 1, 1);
+    this.viewpoint = null;
+    this.fovApplied = false;
 
     this.onModelLoaded = this.onModelLoaded.bind(this);
     this.onTuneKey = this.onTuneKey.bind(this);
@@ -194,25 +218,55 @@ AFRAME.registerComponent('cockpit', {
       return hit;
     };
 
+    if (this.data.doubleSidedCockpit) this.openUpCockpit(ship);
+
+    // An authored viewpoint settles everything the seat needs, so it is
+    // checked before the landmark machinery — a purpose-built ship has no hull
+    // landmarks to find, and must not be blocked waiting for them.
+    this.viewpoint = this.findViewpoint(ship);
+
+    // Only a node with geometry can be measured; an empty is no use here.
+    const hasMesh = (node) => {
+      if (!node) return false;
+      let found = false;
+      node.traverse((child) => { if (child.isMesh) found = true; });
+      return found;
+    };
+
+    const pilotNode = findInShip(this.data.pilot);
+    const pilot = hasMesh(pilotNode) ? pilotNode : findInShip(this.data.seat);
+    if (pilot && this.data.hidePilot) {
+      pilot.traverse((node) => { if (node.isMesh) node.visible = false; });
+    }
+
+    if (this.viewpoint) {
+      this.ship = ship;
+      this.parts = { anchor: pilot };
+      this.ready = true;
+      this.el.sceneEl.emit('cockpit-ready', {
+        ship: this.data.ship,
+        viewpoint: this.viewpoint.name
+      }, false);
+      return;
+    }
+
+    // No viewpoint: fall back to locating the seat from hull landmarks.
     const parts = {
       nose: findInShip(this.data.nose),
       tail: findInShip(this.data.tail),
       dorsal: findInShip(this.data.dorsal),
       ventral: findInShip(this.data.ventral),
-      anchor: findInShip(this.data.pilot)
+      anchor: pilot
     };
 
-    const missing = Object.entries(parts).filter(([, n]) => !n).map(([k]) => k);
+    const missing = Object.entries(parts).filter(([, n]) => !hasMesh(n)).map(([k]) => k);
     if (missing.length) {
-      console.warn(`cockpit: ${this.data.ship} is missing ${missing.join(', ')}`);
+      console.warn(
+        `cockpit: ${this.data.ship} has no "${this.data.viewpoint}" viewpoint, ` +
+        `and is missing ${missing.join(', ')} for the fallback`
+      );
       return;
     }
-
-    if (this.data.hidePilot) {
-      parts.anchor.traverse((node) => { if (node.isMesh) node.visible = false; });
-    }
-
-    if (this.data.doubleSidedCockpit) this.openUpCockpit(ship);
 
     // Uniform scale, so one number converts local extents into world units.
     const worldScale = new THREE.Vector3();
@@ -224,8 +278,37 @@ AFRAME.registerComponent('cockpit', {
 
     this.ship = ship;
     this.parts = parts;
+
+    this.crown = 0;
+    this.face = 0;
+    if (this.updateFrame()) this.measurePilot();
+
     this.ready = true;
     this.el.sceneEl.emit('cockpit-ready', { ship: this.data.ship }, false);
+  },
+
+  /**
+   * Finds an authored viewpoint inside the ship.
+   *
+   * A camera exported from the modelling tool carries position, orientation
+   * and field of view together, which is everything the seat needs. Cameras
+   * and A-Frame agree on convention — both look down -Z with +Y up — so the
+   * transform transfers with no correction.
+   */
+  findViewpoint: function (ship) {
+    const wanted = this.data.viewpoint;
+    if (!wanted || wanted === 'none') return null;
+
+    const target = sanitizeName(wanted);
+    let named = null;
+    let firstCamera = null;
+
+    ship.traverse((node) => {
+      if (!firstCamera && node.isCamera) firstCamera = node;
+      if (!named && node.name && node.name.startsWith(target)) named = node;
+    });
+
+    return named || firstCamera;
   },
 
   /**
@@ -245,34 +328,99 @@ AFRAME.registerComponent('cockpit', {
     });
   },
 
-  tick: function () {
-    if (!this.ready) return;
-
+  /**
+   * Rebuilds the ship's frame and the pilot anchor from current world state.
+   * Runs once at load to measure the pilot, then every frame to fly the rig.
+   */
+  updateFrame: function () {
     const parts = this.parts;
-    if (!worldCentre(parts.nose, this.nose)) return;
-    worldCentre(parts.tail, this.tail);
-    worldCentre(parts.dorsal, this.dorsal);
-    worldCentre(parts.ventral, this.ventral);
-    worldCentre(parts.anchor, this.anchor);
+    if (!worldCentre(parts.nose, this.nose)) return false;
+    if (!worldCentre(parts.tail, this.tail)) return false;
+    if (!worldCentre(parts.dorsal, this.dorsal)) return false;
+    if (!worldCentre(parts.ventral, this.ventral)) return false;
+    if (!worldCentre(parts.anchor, this.anchor)) return false;
 
     this.forwardAxis.subVectors(this.nose, this.tail);
-    const length = this.forwardAxis.length();
-    if (length < 1e-9) return;
-    this.forwardAxis.divideScalar(length);
+    if (this.forwardAxis.length() < 1e-9) return false;
+    this.forwardAxis.normalize();
 
     // Dorsal minus ventral is a real up vector, not a hint.
     this.upAxis.subVectors(this.dorsal, this.ventral);
     this.rightAxis.crossVectors(this.forwardAxis, this.upAxis);
-    if (this.rightAxis.lengthSq() < 1e-18) return;
+    if (this.rightAxis.lengthSq() < 1e-18) return false;
     this.rightAxis.normalize();
     this.upAxis.crossVectors(this.rightAxis, this.forwardAxis).normalize();
 
+    return true;
+  },
+
+  /**
+   * Finds the pilot's crown and the front of their face, as distances from
+   * their centre along the ship's up and forward axes.
+   *
+   * Measured from the mesh itself rather than assumed, and the face is taken
+   * only from vertices near the crown: a seated pilot's knees reach further
+   * forward than their nose, so measuring the whole body would put the camera
+   * out past the kneecaps.
+   */
+  measurePilot: function () {
+    const vertex = new THREE.Vector3();
+    const delta = new THREE.Vector3();
+    const samples = [];
+    let crown = -Infinity;
+
+    this.parts.anchor.updateWorldMatrix(true, true);
+    this.parts.anchor.traverse((node) => {
+      if (!node.isMesh || !node.geometry) return;
+      const position = node.geometry.getAttribute('position');
+      if (!position) return;
+
+      for (let i = 0; i < position.count; i++) {
+        vertex.fromBufferAttribute(position, i).applyMatrix4(node.matrixWorld);
+        delta.subVectors(vertex, this.anchor);
+        const along = delta.dot(this.upAxis);
+        const ahead = delta.dot(this.forwardAxis);
+        if (along > crown) crown = along;
+        samples.push(along, ahead);
+      }
+    });
+
+    if (!samples.length) return false;
+
+    // Head band: the top of the body, where the face is.
+    const band = crown - this.data.headBand * this.unitsPerMetre;
+    let face = -Infinity;
+    for (let i = 0; i < samples.length; i += 2) {
+      if (samples[i] >= band && samples[i + 1] > face) face = samples[i + 1];
+    }
+
+    this.crown = crown;
+    this.face = Number.isFinite(face) ? face : 0;
+    return true;
+  },
+
+  tick: function () {
+    if (!this.ready) return;
+
+    if (this.viewpoint) {
+      this.followViewpoint();
+      return;
+    }
+
+    if (!this.updateFrame()) return;
+
     const unitsPerMetre = this.unitsPerMetre;
 
+    // Eye height: just below the crown, where a forehead is. Eye depth: just
+    // ahead of the face, so the view is inside the cockpit without being
+    // inside the pilot's head.
+    const rise = this.crown - this.data.foreheadDrop * unitsPerMetre;
+    const reach = this.face + this.data.faceClearance * unitsPerMetre;
+
     this.eye.copy(this.anchor)
-      .addScaledVector(this.forwardAxis, this.data.forward * unitsPerMetre)
-      .addScaledVector(this.rightAxis, this.data.right * unitsPerMetre)
-      .addScaledVector(this.upAxis, this.data.up * unitsPerMetre);
+      .addScaledVector(this.upAxis, rise + this.data.up * unitsPerMetre)
+      .addScaledVector(this.forwardAxis, reach + this.data.forward * unitsPerMetre)
+      .addScaledVector(this.rightAxis, this.data.right * unitsPerMetre);
 
     // A-Frame cameras look down -Z, so the ship's forward is the rig's -Z.
     this.basis.makeBasis(
@@ -294,6 +442,8 @@ AFRAME.registerComponent('cockpit', {
         ship: this.data.ship,
         shipLengthWorldUnits: r(this.shipLength),
         unitsPerMetre: r(this.unitsPerMetre),
+        crownAbovePilotCentreMetres: r(this.crown / this.unitsPerMetre),
+        faceAheadOfPilotCentreMetres: r(this.face / this.unitsPerMetre),
         forwardAxis: this.forwardAxis.toArray().map(r),
         upAxis: this.upAxis.toArray().map(r),
         nose: this.nose.toArray().map(r),
@@ -301,6 +451,49 @@ AFRAME.registerComponent('cockpit', {
         dorsal: this.dorsal.toArray().map(r),
         ventral: this.ventral.toArray().map(r),
         pilotAnchor: this.anchor.toArray().map(r)
+      }));
+    }
+  },
+
+  /**
+   * Rides an authored viewpoint node.
+   *
+   * The node's transform becomes the rig's, so head tracking composes on top
+   * of the authored framing rather than fighting it — a fixed camera cannot be
+   * used directly in VR, where the headset owns the pose.
+   *
+   * Its world scale is also the right rig scale: if the ship is authored in
+   * metres and then scaled into the scene, that same factor is what converts a
+   * real metre of head movement into world units.
+   */
+  followViewpoint: function () {
+    const rig = this.el.object3D;
+
+    this.viewpoint.updateWorldMatrix(true, false);
+    this.viewpoint.matrixWorld.decompose(this.eye, this.orientation, this.viewScale);
+
+    rig.position.copy(this.eye);
+    rig.quaternion.copy(this.orientation);
+    if (this.data.matchScale && this.viewScale.x > 0) rig.scale.setScalar(this.viewScale.x);
+
+    // Adopt the authored field of view on flat screens. In VR the headset
+    // dictates it, and overriding would distort the view.
+    if (this.viewpoint.isCamera && !this.el.sceneEl.is('vr-mode') && !this.fovApplied) {
+      const cameraEl = this.el.sceneEl.camera && this.el.sceneEl.camera.el;
+      if (cameraEl) {
+        cameraEl.setAttribute('camera', 'fov', this.viewpoint.fov);
+        this.fovApplied = true;
+      }
+    }
+
+    if (this.data.debug && !this.logged) {
+      this.logged = true;
+      console.log('[cockpit]', JSON.stringify({
+        viewpoint: this.viewpoint.name,
+        isCamera: !!this.viewpoint.isCamera,
+        fov: this.viewpoint.isCamera ? this.viewpoint.fov : null,
+        rigScale: Number(this.viewScale.x.toFixed(5)),
+        position: this.eye.toArray().map((v) => Number(v.toFixed(3)))
       }));
     }
   },
