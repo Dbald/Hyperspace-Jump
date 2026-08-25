@@ -68,6 +68,31 @@ A-Frame version changes:
 npm run vendor:draco
 ```
 
+### The player's ship
+
+`assets/Player_Ship/` holds the A-wing the viewer flies. It is deliberately
+separate from the fleet: the fleet is a baked animation, and this ship has to
+be driveable.
+
+```bash
+npm run optimize:ship
+```
+
+4.44 MB source to **0.53 MB**, 88% smaller, with all 24 meshes, 22 materials
+and 20 textures intact.
+
+Two things to know about it:
+
+- **It has no pilot.** The `Pilot` node is an empty, and the optimizer prunes
+  it as a dead leaf, so the cockpit component falls back to anchoring on the
+  `Seat`.
+- **It is authored at real size**, about 9.6 m nose to tail, or 2.7 world units
+  per metre. The rest of the scene is authored at roughly 0.028 units per
+  metre, so the entity carries a `scale` of 0.0104 to match. Its own authoring
+  is the correct one; scaling the ship is simply cheaper than rescaling the
+  planet, sky, starfield and jump tunnel, all of which are tuned to the
+  existing world.
+
 ### Cockpit textures
 
 `npm run build:cockpit` generates the interior set, procedurally, in the same

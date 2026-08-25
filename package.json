@@ -4,13 +4,14 @@
   "version": "3.0.0",
   "description": "WebXR hyperspace sequence built with A-Frame.",
   "scripts": {
-    "build": "npm run build:textures && npm run build:cockpit && npm run optimize:model",
+    "build": "npm run build:textures && npm run build:cockpit && npm run optimize:model && npm run optimize:ship",
     "build:textures": "node scripts/build-textures.mjs",
     "optimize:model": "node scripts/optimize-fleet.mjs",
     "inspect:model": "gltf-transform inspect assets/Fleet_Model/rebel_fleet_optimized.glb",
     "vendor:draco": "node scripts/vendor-draco.mjs",
     "serve": "npx --yes http-server . -p 8080 -c-1",
-    "build:cockpit": "node scripts/build-cockpit.mjs"
+    "build:cockpit": "node scripts/build-cockpit.mjs",
+    "optimize:ship": "node scripts/optimize-fleet.mjs --input assets/Player_Ship/awing_cockpit_source.glb --output assets/Player_Ship/awing_cockpit.glb"
   },
   "devDependencies": {
     "@gltf-transform/cli": "4.4.2",

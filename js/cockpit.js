@@ -106,8 +106,12 @@ AFRAME.registerComponent('cockpit', {
     tail: { default: 'Hull_Rear_1' },
     dorsal: { default: 'Hull_Dorsal' },
     ventral: { default: 'Hull_Ventral' },
-    // Anchor for the eye. The pilot's own head is where a pilot's eyes are.
+    // Anchor for the eye when no viewpoint is authored. Prefers the pilot,
+    // whose head is where a pilot's eyes are; falls back to the seat, which is
+    // all an emptied cockpit has. An empty Pilot node does not survive the
+    // optimizer, which prunes it as a dead leaf.
     pilot: { default: 'Pilot' },
+    seat: { default: 'Seat' },
 
     // How far below the crown to sit, in metres. 0.10 is the literal forehead;
     // the measured canopy on this ship puts its glass centre about 0.31 below
@@ -221,7 +225,16 @@ AFRAME.registerComponent('cockpit', {
     // landmarks to find, and must not be blocked waiting for them.
     this.viewpoint = this.findViewpoint(ship);
 
-    const pilot = findInShip(this.data.pilot);
+    // Only a node with geometry can be measured; an empty is no use here.
+    const hasMesh = (node) => {
+      if (!node) return false;
+      let found = false;
+      node.traverse((child) => { if (child.isMesh) found = true; });
+      return found;
+    };
+
+    const pilotNode = findInShip(this.data.pilot);
+    const pilot = hasMesh(pilotNode) ? pilotNode : findInShip(this.data.seat);
     if (pilot && this.data.hidePilot) {
       pilot.traverse((node) => { if (node.isMesh) node.visible = false; });
     }
@@ -246,7 +259,7 @@ AFRAME.registerComponent('cockpit', {
       anchor: pilot
     };
 
-    const missing = Object.entries(parts).filter(([, n]) => !n).map(([k]) => k);
+    const missing = Object.entries(parts).filter(([, n]) => !hasMesh(n)).map(([k]) => k);
     if (missing.length) {
       console.warn(
         `cockpit: ${this.data.ship} has no "${this.data.viewpoint}" viewpoint, ` +
@@ -322,10 +335,10 @@ AFRAME.registerComponent('cockpit', {
   updateFrame: function () {
     const parts = this.parts;
     if (!worldCentre(parts.nose, this.nose)) return false;
-    worldCentre(parts.tail, this.tail);
-    worldCentre(parts.dorsal, this.dorsal);
-    worldCentre(parts.ventral, this.ventral);
-    worldCentre(parts.anchor, this.anchor);
+    if (!worldCentre(parts.tail, this.tail)) return false;
+    if (!worldCentre(parts.dorsal, this.dorsal)) return false;
+    if (!worldCentre(parts.ventral, this.ventral)) return false;
+    if (!worldCentre(parts.anchor, this.anchor)) return false;
 
     this.forwardAxis.subVectors(this.nose, this.tail);
     if (this.forwardAxis.length() < 1e-9) return false;
