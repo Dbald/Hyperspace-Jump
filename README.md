@@ -229,6 +229,24 @@ childless camera exported with that box unchecked disappears entirely.
 Cameras survive `npm run optimize:model` intact — transform and field of view
 both — so an authored viewpoint can ship through the build.
 
+### Field of view
+
+`cockpit`'s `fov` sets the flat-screen vertical field of view; a headset always
+dictates its own, so it is skipped in VR. An authored camera's own field of
+view still wins over it.
+
+This is the knob that decides how much of your own ship you see, and it is
+worth knowing which way it runs. A-Frame's `fov` is **vertical**, so a wide
+browser window turns a modest vertical figure into a very wide horizontal one —
+80° vertical at a 1.9 aspect is about 115° horizontal, which splays the wings
+across the view. The default of 62 lands nearer 97° horizontal.
+
+With `tune: true`, `[` narrows and `]` widens, logging each step.
+
+Measured for context: the eye sits 0.75 m behind the canopy glass and 0.36 m
+above the seat, and an A-wing is a 6.6 m wide delta the pilot sits on top of,
+so the wings falling into the lower view is accurate rather than a fault.
+
 ### Where the eye sits
 
 Used only when the model provides no authored viewpoint.

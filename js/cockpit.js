@@ -139,6 +139,16 @@ AFRAME.registerComponent('cockpit', {
     lockMovement: { default: true },
     matchScale: { default: true },
 
+    // Vertical field of view on flat screens, in degrees. 0 leaves the
+    // camera's own setting alone; a headset always dictates its own.
+    //
+    // This is the knob that controls how much of your own ship you see. An
+    // A-wing is a 6.6 m wide delta and the pilot sits on top of it, so the
+    // wings sit roughly 34 degrees below the sightline. A *narrower* view
+    // pushes them out of frame; widening pulls them toward centre and shows
+    // more hull, which is the opposite of what it sounds like it should do.
+    fov: { default: 62 },
+
     debug: { default: false },
     tune: { default: false },
     tuneStep: { default: 0.05 }
@@ -168,6 +178,8 @@ AFRAME.registerComponent('cockpit', {
     this.onTuneKey = this.onTuneKey.bind(this);
     if (this.data.tune) window.addEventListener('keydown', this.onTuneKey);
 
+    this.applyFov(this.data.fov);
+
     const model = this.data.model;
     if (model) {
       if (model.getObject3D && model.getObject3D('mesh')) this.onModelLoaded();
@@ -175,6 +187,16 @@ AFRAME.registerComponent('cockpit', {
     }
 
     if (this.data.lockMovement) this.lockMovement();
+  },
+
+  /**
+   * Sets the flat-screen field of view. Skipped in VR, where the headset's
+   * optics decide and overriding would distort the view.
+   */
+  applyFov: function (degrees) {
+    if (!degrees || this.el.sceneEl.is('vr-mode')) return;
+    const cameraEl = this.el.sceneEl.camera && this.el.sceneEl.camera.el;
+    if (cameraEl) cameraEl.setAttribute('camera', 'fov', degrees);
   },
 
   /** The viewer is belted into a seat; only head look should move the view. */
@@ -478,12 +500,9 @@ AFRAME.registerComponent('cockpit', {
 
     // Adopt the authored field of view on flat screens. In VR the headset
     // dictates it, and overriding would distort the view.
-    if (this.viewpoint.isCamera && !this.el.sceneEl.is('vr-mode') && !this.fovApplied) {
-      const cameraEl = this.el.sceneEl.camera && this.el.sceneEl.camera.el;
-      if (cameraEl) {
-        cameraEl.setAttribute('camera', 'fov', this.viewpoint.fov);
-        this.fovApplied = true;
-      }
+    if (this.viewpoint.isCamera && !this.fovApplied) {
+      this.applyFov(this.viewpoint.fov);
+      this.fovApplied = true;
     }
 
     if (this.data.debug && !this.logged) {
@@ -508,6 +527,16 @@ AFRAME.registerComponent('cockpit', {
       PageUp: ['up', step],
       PageDown: ['up', -step]
     };
+
+    // Bracket keys widen and narrow the view.
+    if (event.key === '[' || event.key === ']') {
+      event.preventDefault();
+      const next = Math.max(20, Math.min(120, this.data.fov + (event.key === ']' ? 2 : -2)));
+      this.el.setAttribute('cockpit', 'fov', next);
+      this.applyFov(next);
+      console.log(`[cockpit] fov: ${next}`);
+      return;
+    }
 
     const move = moves[event.key];
     if (!move) return;
